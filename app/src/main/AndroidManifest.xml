@@ -13,10 +13,10 @@
         android:theme="@style/Theme.CareLight"
         tools:targetApi="31">
         <activity
-            android:name=".HomeActivity"
+            android:name=".TitleActivity"
             android:exported="false" />
         <activity
-            android:name=".TitleActivity"
+            android:name=".HomeActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
