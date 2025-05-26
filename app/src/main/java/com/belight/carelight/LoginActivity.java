@@ -34,6 +34,7 @@ public class LoginActivity extends AppCompatActivity {
     private EditText editTextEmailAddress;
     private EditText editTextPassword;
     private Button buttonLogin;
+    private Button buttonSignup;
     private FirebaseFirestore db;
     private FirebaseAuth mAuth; // FirebaseAuth 인스턴스 변수
 
@@ -53,6 +54,7 @@ public class LoginActivity extends AppCompatActivity {
         editTextEmailAddress = findViewById(R.id.et_email_address);
         editTextPassword = findViewById(R.id.et_pw);
         buttonLogin = findViewById(R.id.btn_login);
+        buttonSignup = findViewById(R.id.btn_sign_up);
 
         mAuth = FirebaseAuth.getInstance();
 
@@ -62,6 +64,7 @@ public class LoginActivity extends AppCompatActivity {
             return insets;
         });
 
+        // Feat: Login
         buttonLogin.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -76,7 +79,7 @@ public class LoginActivity extends AppCompatActivity {
             }
         });
 
-        // 비밀번호 찾기 참조하기
+        // Feat: 비밀번호 찾기 참조하기
         clickableTextView = findViewById(R.id.tv_find_pw);
         clickableTextView.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -85,6 +88,18 @@ public class LoginActivity extends AppCompatActivity {
                 Toast.makeText(LoginActivity.this, "텍스트뷰가 클릭됨!", Toast.LENGTH_SHORT).show();
             }
         });
+
+
+        // Feat: 회원가입
+        buttonSignup.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(LoginActivity.this, SignupActivity.class);
+                startActivity(intent);
+            }
+        });
+
+
     }
     private void firebaseAuthLogin(String email, String password) {
         mAuth.signInWithEmailAndPassword(email, password)
