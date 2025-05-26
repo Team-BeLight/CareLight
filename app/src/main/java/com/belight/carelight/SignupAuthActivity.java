@@ -32,7 +32,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
-public class SignupActivity extends AppCompatActivity {
+public class SignupAuthActivity extends AppCompatActivity {
 
     private static final String TAG = "SignupActivity";
 
@@ -132,11 +132,11 @@ public class SignupActivity extends AppCompatActivity {
                                 // Firestore에 사용자 정보 저장
                                 saveUserProfileToFirestore(firebaseUser.getUid(), email);
                             } else {
-                                Toast.makeText(SignupActivity.this, "사용자 정보를 가져오는데 실패했습니다.", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(SignupAuthActivity.this, "사용자 정보를 가져오는데 실패했습니다.", Toast.LENGTH_SHORT).show();
                             }
                         } else {
                             Log.w(TAG, "createUserWithEmail:failure", task.getException());
-                            Toast.makeText(SignupActivity.this, "회원가입 실패: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
+                            Toast.makeText(SignupAuthActivity.this, "회원가입 실패: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
                         }
                     }
                 });
@@ -159,9 +159,9 @@ public class SignupActivity extends AppCompatActivity {
                     @Override
                     public void onSuccess(Void aVoid) {
                         Log.d(TAG, "User profile successfully written to Firestore.");
-                        Toast.makeText(SignupActivity.this, "회원가입 및 프로필 저장 성공!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(SignupAuthActivity.this, "회원가입 및 프로필 저장 성공!", Toast.LENGTH_SHORT).show();
 
-                        Intent intent = new Intent(SignupActivity.this, LoginActivity.class);
+                        Intent intent = new Intent(SignupAuthActivity.this, LoginActivity.class);
                         // 로그인 화면으로 돌아갈 때 이전 액티비티 스택을 정리
                         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
                         intent.putExtra("EMAIL_FROM_SIGNUP", email); // 로그인 화면에 이메일 자동 채움
@@ -173,7 +173,7 @@ public class SignupActivity extends AppCompatActivity {
                     @Override
                     public void onFailure(@NonNull Exception e) {
                         Log.w(TAG, "Error writing user profile to Firestore", e);
-                        Toast.makeText(SignupActivity.this, "프로필 저장 실패: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        Toast.makeText(SignupAuthActivity.this, "프로필 저장 실패: " + e.getMessage(), Toast.LENGTH_LONG).show();
                     }
                 });
     }
