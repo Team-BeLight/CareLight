@@ -69,7 +69,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/editTextTextEmailAddress"
+        app:layout_constraintTop_toBottomOf="@id/editTextTextEmailAddress"
         android:importantForAutofill="no" />
 
     <Button
@@ -105,9 +105,9 @@
         android:layout_marginStart="100dp"
         android:layout_marginTop="11dp"
         android:layout_marginEnd="100dp"
-        android:text="@string/find_pw_btn"
         android:clickable="true"
         android:focusable="true"
+        android:text="@string/find_pw_btn"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/button" />
