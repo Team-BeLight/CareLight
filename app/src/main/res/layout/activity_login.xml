@@ -15,7 +15,7 @@
         android:layout_marginStart="100dp"
         android:layout_marginTop="80dp"
         android:layout_marginEnd="100dp"
-        android:text="로그인"
+        android:text="@string/login_title_text"
         android:textAlignment="center"
         android:textSize="36sp"
         app:layout_constraintEnd_toEndOf="parent"
@@ -29,7 +29,7 @@
         android:layout_marginStart="20dp"
         android:layout_marginTop="10dp"
         android:layout_marginEnd="20dp"
-        android:text="로그인을 하고 편안한 서비스를 이용하세요!"
+        android:text="@string/login_description_text"
         android:textAlignment="center"
         android:textSize="18sp"
         app:layout_constraintEnd_toEndOf="parent"
@@ -45,13 +45,15 @@
         android:layout_marginTop="50dp"
         android:layout_marginEnd="50dp"
         android:ems="10"
-        android:hint="Email address"
+        android:hint="@string/hint_email_address_text"
         android:inputType="textEmailAddress"
         android:outlineProvider="none"
+        android:padding="12dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/textView8" />
+        app:layout_constraintTop_toBottomOf="@+id/textView8"
+        android:importantForAutofill="no" />
 
     <EditText
         android:id="@+id/editTextTextPassword2"
@@ -61,12 +63,14 @@
         android:layout_marginTop="20dp"
         android:layout_marginEnd="50dp"
         android:ems="10"
-        android:hint="Password"
+        android:hint="@string/hint_pw_text"
         android:inputType="textPassword"
+        android:padding="12dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/editTextTextEmailAddress" />
+        app:layout_constraintTop_toBottomOf="@+id/editTextTextEmailAddress"
+        android:importantForAutofill="no" />
 
     <Button
         android:id="@+id/button4"
@@ -75,7 +79,7 @@
         android:layout_marginStart="50dp"
         android:layout_marginEnd="50dp"
         android:layout_marginBottom="10dp"
-        android:text="회원가입하기"
+        android:text="@string/signup_btn_text"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -89,7 +93,7 @@
         android:layout_marginStart="50dp"
         android:layout_marginTop="24dp"
         android:layout_marginEnd="50dp"
-        android:text="로그인하기"
+        android:text="@string/login_btn_text"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/editTextTextPassword2" />
@@ -101,7 +105,7 @@
         android:layout_marginStart="100dp"
         android:layout_marginTop="11dp"
         android:layout_marginEnd="100dp"
-        android:text="비밀번호 찾기"
+        android:text="@string/find_pw_btn"
         android:clickable="true"
         android:focusable="true"
         app:layout_constraintEnd_toEndOf="parent"
