@@ -7,8 +7,13 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import android.content.Intent;
+import android.os.Handler;
+import android.os.Looper;
 
 public class TitleActivity extends AppCompatActivity {
+
+    private static final int SPLASH_TIMEOUT = 2000; // 2000ms
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -20,5 +25,15 @@ public class TitleActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+
+        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                Intent intent = new Intent(TitleActivity.this, LoginActivity.class);
+                startActivity(intent);
+
+                finish();
+            }
+        }, SPLASH_TIMEOUT);
     }
 }
