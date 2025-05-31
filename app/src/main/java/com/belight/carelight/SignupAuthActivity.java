@@ -121,25 +121,30 @@ public class SignupAuthActivity extends AppCompatActivity {
         }
 
         // Feat: Firebase Authentication으로 사용자 생성
-        mAuth.createUserWithEmailAndPassword(email, password)
-                .addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {
-                    @Override
-                    public void onComplete(@NonNull Task<AuthResult> task) {
-                        if (task.isSuccessful()) {
-                            Log.d(TAG, "createUserWithEmail:success");
-                            FirebaseUser firebaseUser = mAuth.getCurrentUser();
-                            if (firebaseUser != null) {
-                                // Firestore에 사용자 정보 저장
-                                saveUserProfileToFirestore(firebaseUser.getUid(), email);
-                            } else {
-                                Toast.makeText(SignupAuthActivity.this, "사용자 정보를 가져오는데 실패했습니다.", Toast.LENGTH_SHORT).show();
-                            }
-                        } else {
-                            Log.w(TAG, "createUserWithEmail:failure", task.getException());
-                            Toast.makeText(SignupAuthActivity.this, "회원가입 실패: " + task.getException().getMessage(), Toast.LENGTH_LONG).show();
-                        }
+        mAuth.createUserWithEmailAndPassword(email, password).addOnCompleteListener(this, new OnCompleteListener<AuthResult>() {
+            @Override
+            public void onComplete(@NonNull Task<AuthResult> task) {
+                if (task.isSuccessful()) {
+                    Log.d(TAG, "createUserWithEmail:success");
+                    FirebaseUser firebaseUser = mAuth.getCurrentUser();
+                    if (firebaseUser != null) {
+                        // 계정 생성 성공 -> 추가 정보 입력 화면으로 이동
+                        Intent intent = new Intent(SignupAuthActivity.this, SignupProfileActivity.class);
+                        intent.putExtra("USER_UID", firebaseUser.getUid());
+                        intent.putExtra("USER_EMAIL", email);
+                        startActivity(intent);
+                        finish(); // 현재 액티비티 종료
+                        Toast.makeText(SignupAuthActivity.this, "현재 창 종료.", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(SignupAuthActivity.this, "사용자 정보를 가져오는데 실패했습니다.", Toast.LENGTH_SHORT).show();
                     }
-                });
+                } else {
+                    Log.w(TAG, "createUserWithEmail:failure", task.getException());
+                    Toast.makeText(SignupAuthActivity.this, "계정 생성 실패: " + task.getException().getMessage(),
+                            Toast.LENGTH_LONG).show();
+                }
+            }
+        });
     }
 
     // Feat: Firebase에 data 저장
