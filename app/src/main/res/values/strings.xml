@@ -12,7 +12,6 @@
     <string name="hint_pw_text">비밀번호를 입력하세요</string>
 
 
-
     <string-array name="health_status_options">
         <item>Normal</item>
         <item>Caution</item>
