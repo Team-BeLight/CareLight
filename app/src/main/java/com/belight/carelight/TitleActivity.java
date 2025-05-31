@@ -58,7 +58,7 @@ public class TitleActivity extends AppCompatActivity {
                     // 사용자가 로그인되어 있지 않은 경우 -> LoginActivity로 이동
                     Log.d(TAG, "No user logged in. Navigating to LoginActivity.");
                     intent = new Intent(TitleActivity.this, LoginActivity.class);
-                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                 }
                 startActivity(intent);
                 finish();

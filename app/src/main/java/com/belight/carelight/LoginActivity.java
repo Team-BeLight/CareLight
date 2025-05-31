@@ -109,10 +109,10 @@ public class LoginActivity extends AppCompatActivity {
                             Log.d(TAG, "signInWithEmail:success");
                             FirebaseUser user = mAuth.getCurrentUser();
                             Toast.makeText(LoginActivity.this, "Firebase 인증 성공!", Toast.LENGTH_SHORT).show();
-                             Intent intent = new Intent(LoginActivity.this, HomeActivity.class);
-                             intent.putExtra("USER_UID", user.getUid());
-                             startActivity(intent);
-                             finish();
+                            Intent intent = new Intent(LoginActivity.this, HomeActivity.class);
+                            intent.putExtra("USER_UID", user.getUid());
+                            startActivity(intent);
+                            finish();
                         } else {
                             // 로그인 실패
                             Log.w(TAG, "signInWithEmail:failure", task.getException());
