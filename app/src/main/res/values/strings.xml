@@ -11,4 +11,20 @@
     <string name="hint_email_address_text">이메일 주소를 입력하세요</string>
     <string name="hint_pw_text">비밀번호를 입력하세요</string>
 
+
+
+    <string-array name="health_status_options">
+        <item>Normal</item>
+        <item>Caution</item>
+        <item>Danger</item>
+        <item>Unknown</item>
+    </string-array>
+
+    <string-array name="robot_status_options">
+        <item>Active</item>
+        <item>Inactive</item>
+        <item>Charging</item>
+        <item>Error</item>
+        <item>Unknown</item>
+    </string-array>
 </resources>
