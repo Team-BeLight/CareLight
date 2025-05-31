@@ -20,7 +20,12 @@ import androidx.core.view.WindowInsetsCompat;
 
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.google.firebase.firestore.Transaction;
+//import com.google.firebase.firestore.FieldValue;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -31,7 +36,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
-
 
 public class SignupProfileActivity extends AppCompatActivity {
 
@@ -44,12 +48,16 @@ public class SignupProfileActivity extends AppCompatActivity {
     private Button btnCompleteSignup;
 
     private FirebaseFirestore db;
-    private String userUid;
+    private String firebaseAuthUid; // Firebase Auth에서 넘어온 UID (문서 ID로 사용)
     private String userEmail;
 
-    // 전화번호 유효성 검사를 위한 정규 표현식
     private static final Pattern PHONE_PATTERN = Pattern.compile("^\\d{3}-\\d{3,4}-\\d{4}$");
 
+    // 콜백 인터페이스 정의
+    interface OnCustomIdGeneratedListener {
+        void onSuccess(String customId);
+        void onFailure(Exception e);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,14 +67,13 @@ public class SignupProfileActivity extends AppCompatActivity {
 
         db = FirebaseFirestore.getInstance();
 
-        // Intent로부터 UID와 이메일 받기
         Intent intent = getIntent();
-        userUid = intent.getStringExtra("USER_UID");
+        firebaseAuthUid = intent.getStringExtra("USER_UID"); // Firebase Auth UID
         userEmail = intent.getStringExtra("USER_EMAIL");
 
-        if (userUid == null || userEmail == null) {
+        if (firebaseAuthUid == null || userEmail == null) {
             Toast.makeText(this, "사용자 정보를 가져오지 못했습니다. 다시 시도해주세요.", Toast.LENGTH_LONG).show();
-            Log.e(TAG, "UID or Email is null. UID: " + userUid + ", Email: " + userEmail);
+            Log.e(TAG, "Auth UID or Email is null. Auth UID: " + firebaseAuthUid + ", Email: " + userEmail);
             finish();
             return;
         }
@@ -82,7 +89,24 @@ public class SignupProfileActivity extends AppCompatActivity {
 
         btnCompleteSignup.setOnClickListener(v -> {
             if (validateInputs()) {
-                saveProfileDataToFirestore();
+
+                btnCompleteSignup.setEnabled(false); // 중복 클릭 방지
+                Toast.makeText(this, "ID 생성 중...", Toast.LENGTH_SHORT).show();
+
+                getNextCustomUserId(new OnCustomIdGeneratedListener() {
+                    @Override
+                    public void onSuccess(String customUserId) {
+                        saveProfileDataToFirestore(customUserId);
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        // 로딩 표시 종료
+                        btnCompleteSignup.setEnabled(true);
+                        Log.e(TAG, "Failed to generate custom user ID", e);
+                        Toast.makeText(SignupProfileActivity.this, "사용자 ID 생성 실패: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                });
             }
         });
     }
@@ -102,42 +126,36 @@ public class SignupProfileActivity extends AppCompatActivity {
     }
 
     private void setupSpinners() {
-        // 초기 건강 상태 스피너 설정 (기존 코드 유지)
         ArrayAdapter<CharSequence> healthAdapter = ArrayAdapter.createFromResource(this,
                 R.array.health_status_options, android.R.layout.simple_spinner_item);
         healthAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerHealthStatus.setAdapter(healthAdapter);
-        // 필요시 healthStatus의 기본값 설정:
-        // spinnerHealthStatus.setSelection(getIndex(spinnerHealthStatus, "Normal")); // "Normal"이 arrays.xml에 정의된 값과 일치해야 함
+        spinnerHealthStatus.setSelection(getIndex(spinnerHealthStatus, "Normal"));
 
-        // 로봇 ID 스피너 설정: "unknown"만 포함하도록 변경
-        List<String> robotIdOptions = List.of("unknown"); // "unknown"만 리스트에 추가
+
+        List<String> robotIdOptions = List.of("unknown");
         ArrayAdapter<String> robotIdAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, robotIdOptions);
         robotIdAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerRobotId.setAdapter(robotIdAdapter);
-        spinnerRobotId.setSelection(0); // 유일한 아이템이므로 항상 "unknown"이 선택됨
-        // spinnerRobotId.setEnabled(false); // 선택 사항: 사용자가 다른 값을 선택할 수 없도록 스피너를 비활성화할 수 있습니다.
+        spinnerRobotId.setSelection(0);
 
-        // 로봇 상태 스피너 설정: "unknown"만 포함하도록 변경
-        // R.array.robot_status_options 대신 프로그래밍 방식으로 리스트 생성
-        List<String> robotStatusOptions = List.of("unknown"); // "unknown"만 리스트에 추가 (DB 저장 값과 일관되게 소문자로)
+
+        List<String> robotStatusOptions = List.of("unknown");
         ArrayAdapter<String> robotStatusAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, robotStatusOptions);
         robotStatusAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerRobotStatus.setAdapter(robotStatusAdapter);
-        spinnerRobotStatus.setSelection(0); // 유일한 아이템이므로 항상 "unknown"이 선택됨
-        // spinnerRobotStatus.setEnabled(false); // 선택 사항: 사용자가 다른 값을 선택할 수 없도록 스피너를 비활성화할 수 있습니다.
+        spinnerRobotStatus.setSelection(0);
+
     }
 
-    // 스피너에서 특정 값의 인덱스를 찾는 헬퍼 메소드
-    private int getIndex(Spinner spinner, String myString){
+    private int getIndex(Spinner spinner, String myString) {
         for (int i=0;i<spinner.getCount();i++){
             if (spinner.getItemAtPosition(i).toString().equalsIgnoreCase(myString)){
                 return i;
             }
         }
-        return 0; // 기본값 또는 찾지 못했을 경우
+        return 0;
     }
-
 
     private boolean validateInputs() {
         if (TextUtils.isEmpty(etProfileName.getText().toString().trim())) {
@@ -207,61 +225,82 @@ public class SignupProfileActivity extends AppCompatActivity {
             etProfileHeartRate.requestFocus();
             return false;
         }
-
-        // 스피너 값은 기본값이 있으므로 별도 빈 값 체크는 생략 가능 (선택에 따라)
         return true;
     }
 
-    private void saveProfileDataToFirestore() {
+    // 새로운 USR-XXXXX ID를 생성하는 메소드 (id 필드)
+    private void getNextCustomUserId(OnCustomIdGeneratedListener listener) {
+        final DocumentReference counterRef = db.collection("counters").document("userCounter");
+
+        db.runTransaction((Transaction.Function<String>) transaction -> {
+                    DocumentSnapshot counterSnapshot = transaction.get(counterRef);
+                    long nextNumber = 1; // 카운터 필드가 없을 경우 기본 시작 번호
+
+                    if (counterSnapshot.exists()) {
+                        Long lastNumber = counterSnapshot.getLong("lastAssignedNumber");
+                        if (lastNumber != null) {
+                            nextNumber = lastNumber + 1;
+                        }
+                    }
+
+                    // 카운터 업데이트 or 새로 생성
+                    Map<String, Object> newCounterValue = new HashMap<>();
+                    newCounterValue.put("lastAssignedNumber", nextNumber);
+                    transaction.set(counterRef, newCounterValue); // set으로 하면 문서가 없어도 생성됨
+
+                    return String.format(Locale.US, "USR-%05d", nextNumber);
+                }).addOnSuccessListener(listener::onSuccess)
+                .addOnFailureListener(listener::onFailure);
+    }
+
+
+    private void saveProfileDataToFirestore(String customUserId) { // 파라미터로 customUserId 받음
         Map<String, Object> userProfile = new HashMap<>();
-        userProfile.put("userID", userUid); // Firebase Auth UID
+        userProfile.put("authUid", firebaseAuthUid); // Firebase Auth UID 저장 (내부 식별용)
+        userProfile.put("id", customUserId);    // 새로 생성된 USR-XXXXX 형식 ID 저장
         userProfile.put("accountEmail", userEmail);
         userProfile.put("name", etProfileName.getText().toString().trim());
         userProfile.put("age", Integer.parseInt(etProfileAge.getText().toString().trim()));
         userProfile.put("phoneNumber", etProfilePhoneNumber.getText().toString().trim());
 
-        // 비상 연락처 (우선 하나만)
         Map<String, String> emergencyContact1 = new HashMap<>();
         emergencyContact1.put("name", etEmergencyName.getText().toString().trim());
         emergencyContact1.put("relation", etEmergencyRelation.getText().toString().trim());
         emergencyContact1.put("phone", etEmergencyPhone.getText().toString().trim());
-        // 여러 개일 경우 List<Map<String, String>> 형태로 저장
         List<Map<String, String>> emergencyContactsList = new ArrayList<>();
         emergencyContactsList.add(emergencyContact1);
         userProfile.put("emergencyContacts", emergencyContactsList);
 
-
-        userProfile.put("healthStatus", spinnerHealthStatus.getSelectedItem().toString()); // 기본 "Normal"
-        userProfile.put("heartRate", Integer.parseInt(etProfileHeartRate.getText().toString().trim())); // 기본 0
+        userProfile.put("healthStatus", spinnerHealthStatus.getSelectedItem().toString());
+        userProfile.put("heartRate", Integer.parseInt(etProfileHeartRate.getText().toString().trim()));
         userProfile.put("lastActivity", "신규 가입됨");
-        userProfile.put("robotId", spinnerRobotId.getSelectedItem().toString()); // 기본 "unknown"
-        userProfile.put("robotStatus", spinnerRobotStatus.getSelectedItem().toString()); // 기본 "unknown"
-        userProfile.put("needAttention", false); // 예시 기본값 (필요시 조정)
-        userProfile.put("status", "Normal"); // 예시 기본값 (필요시 조정)
-
+        userProfile.put("robotId", spinnerRobotId.getSelectedItem().toString());
+        userProfile.put("robotStatus", spinnerRobotStatus.getSelectedItem().toString());
+        userProfile.put("needAttention", false);
+        userProfile.put("status", "Normal");
 
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy년 MM월 dd일 HH:mm:ss z", Locale.getDefault());
         String formattedDate = sdf.format(new Date());
         userProfile.put("createdAt", formattedDate);
         userProfile.put("updatedAt", formattedDate);
-        // 또는 서버 타임스탬프 사용:
-        // userProfile.put("createdAt", FieldValue.serverTimestamp());
-        // userProfile.put("updatedAt", FieldValue.serverTimestamp());
 
-        // Firestore에 저장
-        db.collection("users").document(userUid)
+        // Firestore에 저장 (문서 ID는 Firebase Auth UID를 사용)
+        db.collection("users").document(firebaseAuthUid) // 문서 ID는 firebaseAuthUid 사용
                 .set(userProfile)
                 .addOnSuccessListener(aVoid -> {
-                    Log.d(TAG, "User profile successfully written to Firestore for UID: " + userUid);
+                    // 로딩 표시 종료
+                    btnCompleteSignup.setEnabled(true);
+                    Log.d(TAG, "User profile successfully written to Firestore for AuthUID: " + firebaseAuthUid + " with customID: " + customUserId);
                     Toast.makeText(SignupProfileActivity.this, "회원가입이 완료되었습니다!", Toast.LENGTH_LONG).show();
-                    // 메인 액티비티 또는 로그인 액티비티로 이동
-                    Intent intent = new Intent(SignupProfileActivity.this, LoginActivity.class); // 또는 MainActivity.class
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK); // 모든 이전 액티비티 종료
+                    Intent intent = new Intent(SignupProfileActivity.this, LoginActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
                     startActivity(intent);
                     finish();
                 })
                 .addOnFailureListener(e -> {
-                    Log.w(TAG, "Error writing user profile to Firestore for UID: " + userUid, e);
+                    // 로딩 표시 종료
+                    btnCompleteSignup.setEnabled(true);
+                    Log.w(TAG, "Error writing user profile to Firestore for AuthUID: " + firebaseAuthUid, e);
                     Toast.makeText(SignupProfileActivity.this, "프로필 저장에 실패했습니다: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
     }

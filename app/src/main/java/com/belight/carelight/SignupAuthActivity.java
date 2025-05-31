@@ -1,4 +1,4 @@
-package com.belight.carelight; // 실제 패키지명으로 되어 있는지 확인
+package com.belight.carelight;
 
 import android.content.Intent;
 import android.os.Bundle;
@@ -80,7 +80,7 @@ public class SignupAuthActivity extends AppCompatActivity {
         textViewGoToLogin.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                finish(); // 현재 activity 종료하면 이전 activity로 이동됨
+                finish();
             }
         });
     }
@@ -150,7 +150,7 @@ public class SignupAuthActivity extends AppCompatActivity {
     // Feat: Firebase에 data 저장
     private void saveUserProfileToFirestore(String userId, String email) {
         Map<String, Object> userProfile = new HashMap<>();
-        userProfile.put("userID", userId); // Firebase Auth UID
+        userProfile.put("id", userId); // Firebase Auth UID
         userProfile.put("accountEmail", email);
 
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy년 MM월 dd일 HH:mm:ss z", Locale.getDefault());
