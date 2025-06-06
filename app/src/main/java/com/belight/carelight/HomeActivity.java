@@ -28,18 +28,24 @@ public class HomeActivity extends AppCompatActivity {
 
     private static final String TAG = "HomeActivity";
 
+    // 기존 UI 및 Firebase 변수들
     private TextView robotInfoText;
+    private TextView textView7;
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
 
     // 디버그 모드 진입을 위한 변수들
-    private int robotInfoClickCount = 0;
-    private long lastRobotInfoClickTime = 0;
-    private static final int REQUIRED_CLICKS_FOR_DEBUG = 7;
+    private int debugClickCount = 0;
+    private long lastDebugClickTime = 0;
+
+    private int logoutClickCount = 0;
+    private long lastLogoutClickTime = 0;
+
+    private static final int REQUIRED_CLICKS = 7;
     private static final long MAX_CLICK_INTERVAL_MS = 500;
 
-    // 현재 표시 중인 토스트 메시지를 관리하기 위한 변수
-    private Toast currentDebugToast = null;
+    // 현재 표시 중인 카운트다운 토스트 메시지를 관리하기 위한 변수
+    private Toast currentCountdownToast = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,9 +62,11 @@ public class HomeActivity extends AppCompatActivity {
         mAuth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
         robotInfoText = findViewById(R.id.tv_robot_info);
+        textView7 = findViewById(R.id.textView7);
 
         loadAndDisplayUserData();
         setupDebugClickListener();
+        setupLogoutClickListener();
     }
 
     private void loadAndDisplayUserData() {
@@ -106,45 +114,83 @@ public class HomeActivity extends AppCompatActivity {
             robotInfoText.setOnClickListener(v -> {
                 long currentTime = System.currentTimeMillis();
 
-                // 마지막 클릭으로부터 너무 오랜 시간이 지났으면 카운트 및 토스트 초기화
-                if (currentTime - lastRobotInfoClickTime > MAX_CLICK_INTERVAL_MS) {
-                    robotInfoClickCount = 0;
-                    if (currentDebugToast != null) {
-                        currentDebugToast.cancel(); // 이전 토스트 취소
-                        currentDebugToast = null;   // 참조 제거
+                if (currentTime - lastDebugClickTime > MAX_CLICK_INTERVAL_MS) {
+                    debugClickCount = 0;
+                    if (currentCountdownToast != null) {
+                        currentCountdownToast.cancel();
+                        currentCountdownToast = null;
                     }
                 }
 
-                robotInfoClickCount++;
-                lastRobotInfoClickTime = currentTime;
+                debugClickCount++;
+                lastDebugClickTime = currentTime;
 
-                // 새로운 토스트를 표시하기 전에 이전 토스트가 있다면 취소
-                if (currentDebugToast != null) {
-                    currentDebugToast.cancel();
+                if (currentCountdownToast != null) {
+                    currentCountdownToast.cancel();
                 }
 
-                if (robotInfoClickCount == REQUIRED_CLICKS_FOR_DEBUG) {
-                    robotInfoClickCount = 0; // 카운트 초기화
-                    currentDebugToast = Toast.makeText(HomeActivity.this, "디버그 모드로 진입합니다.", Toast.LENGTH_SHORT);
-                    currentDebugToast.show();
+                if (debugClickCount == REQUIRED_CLICKS) {
+                    debugClickCount = 0;
+                    currentCountdownToast = Toast.makeText(HomeActivity.this, "디버그 모드로 진입합니다.", Toast.LENGTH_SHORT);
+                    currentCountdownToast.show();
 
                     Intent intent = new Intent(HomeActivity.this, DebugActivity.class);
                     startActivity(intent);
-                } else if (robotInfoClickCount < REQUIRED_CLICKS_FOR_DEBUG) {
-                    int remainingClicks = REQUIRED_CLICKS_FOR_DEBUG - robotInfoClickCount;
-                    if (remainingClicks > 0) {
-                        String message = String.format(Locale.getDefault(), "%d번 더 클릭하면 디버그 모드로 진입합니다.", remainingClicks);
-                        currentDebugToast = Toast.makeText(HomeActivity.this, message, Toast.LENGTH_SHORT);
-                        currentDebugToast.show();
-                    }
+                } else if (debugClickCount < REQUIRED_CLICKS) {
+                    int remainingClicks = REQUIRED_CLICKS - debugClickCount;
+                    String message = String.format(Locale.getDefault(), "%d번 더 클릭하면 디버그 모드로 진입합니다.", remainingClicks);
+                    currentCountdownToast = Toast.makeText(HomeActivity.this, message, Toast.LENGTH_SHORT);
+                    currentCountdownToast.show();
                 } else {
-                    robotInfoClickCount = 0;
-                    if (currentDebugToast != null) {
-                        currentDebugToast.cancel();
-                        currentDebugToast = null;
-                    }
+                    debugClickCount = 0;
                 }
             });
         }
+    }
+
+    private void setupLogoutClickListener() {
+        if (textView7 != null) {
+            textView7.setOnClickListener(v -> {
+                long currentTime = System.currentTimeMillis();
+
+                if (currentTime - lastLogoutClickTime > MAX_CLICK_INTERVAL_MS) {
+                    logoutClickCount = 0;
+                    if (currentCountdownToast != null) {
+                        currentCountdownToast.cancel();
+                        currentCountdownToast = null;
+                    }
+                }
+
+                logoutClickCount++;
+                lastLogoutClickTime = currentTime;
+
+                if (currentCountdownToast != null) {
+                    currentCountdownToast.cancel();
+                }
+
+                if (logoutClickCount == REQUIRED_CLICKS) {
+                    logoutClickCount = 0;
+                    performLogout();
+                } else if (logoutClickCount < REQUIRED_CLICKS) {
+                    int remainingClicks = REQUIRED_CLICKS - logoutClickCount;
+                    String message = String.format(Locale.getDefault(), "로그아웃까지 %d번 남았습니다.", remainingClicks);
+                    currentCountdownToast = Toast.makeText(HomeActivity.this, message, Toast.LENGTH_SHORT);
+                    currentCountdownToast.show();
+                } else {
+                    logoutClickCount = 0;
+                }
+            });
+        }
+    }
+
+    // Feat: 로그아웃
+    private void performLogout() {
+        mAuth.signOut();
+        Toast.makeText(this, "로그아웃 되었습니다.", Toast.LENGTH_SHORT).show();
+
+        Intent intent = new Intent(HomeActivity.this, LoginActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
     }
 }
