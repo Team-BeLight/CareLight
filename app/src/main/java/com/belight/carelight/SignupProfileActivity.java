@@ -25,6 +25,7 @@ import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.Transaction;
+import com.google.firebase.firestore.FieldValue;
 //import com.google.firebase.firestore.FieldValue;
 
 import java.text.SimpleDateFormat;
@@ -279,10 +280,22 @@ public class SignupProfileActivity extends AppCompatActivity {
         userProfile.put("needAttention", false);
         userProfile.put("status", "Normal");
 
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy년 MM월 dd일 HH:mm:ss z", Locale.getDefault());
-        String formattedDate = sdf.format(new Date());
-        userProfile.put("createdAt", formattedDate);
-        userProfile.put("updatedAt", formattedDate);
+        // 통신을 위한 temiCommand 필드 초기값 설정
+        Map<String, Object> initialCommand = new HashMap<>();
+        initialCommand.put("command", "none"); // 초기 상태는 "none" 또는 "idle"
+        initialCommand.put("message", "No command");
+        initialCommand.put("timestamp", FieldValue.serverTimestamp()); // Firestore 서버 시간 기록
+
+        userProfile.put("temiCommand", initialCommand); // userProfile 맵에 추가
+
+//        SimpleDateFormat sdf = new SimpleDateFormat("yyyy년 MM월 dd일 HH:mm:ss z", Locale.getDefault());
+//        String formattedDate = sdf.format(new Date());
+//        userProfile.put("createdAt", formattedDate);
+//        userProfile.put("updatedAt", formattedDate);
+
+        // createdAt, updatedAt 설정
+        userProfile.put("createdAt", FieldValue.serverTimestamp());
+        userProfile.put("updatedAt", FieldValue.serverTimestamp());
 
         // Firestore에 저장 (문서 ID는 Firebase Auth UID를 사용)
         db.collection("users").document(firebaseAuthUid) // 문서 ID는 firebaseAuthUid 사용
@@ -290,7 +303,7 @@ public class SignupProfileActivity extends AppCompatActivity {
                 .addOnSuccessListener(aVoid -> {
                     // 로딩 표시 종료
                     btnCompleteSignup.setEnabled(true);
-                    Log.d(TAG, "User profile successfully written to Firestore for AuthUID: " + firebaseAuthUid + " with customID: " + customUserId);
+                    Log.d(TAG, "User profile with initial command successfully written!");
                     Toast.makeText(SignupProfileActivity.this, "회원가입이 완료되었습니다!", Toast.LENGTH_LONG).show();
                     Intent intent = new Intent(SignupProfileActivity.this, LoginActivity.class);
                     intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
