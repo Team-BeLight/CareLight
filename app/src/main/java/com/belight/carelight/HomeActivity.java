@@ -79,10 +79,15 @@ public class HomeActivity extends AppCompatActivity {
         setupDebugClickListener();
         setupLogoutClickListener();
 
-        btnMedicine.setOnClickListener(v -> sendCommand("showToast", "약 관리 기능이 요청되었습니다."));
-        btnRobotCall.setOnClickListener(v -> sendCommand("showToast", "로봇 호출 기능이 요청되었습니다."));
-        btnVoiceChat.setOnClickListener(v -> sendCommand("showToast", "대화하기 기능이 요청되었습니다."));
-        btnCleaning.setOnClickListener(v -> sendCommand("showToast", "청소하기 기능이 요청되었습니다."));
+//        btnMedicine.setOnClickListener(v -> sendCommand("showToast", "약 관리 기능이 요청되었습니다."));
+//        btnRobotCall.setOnClickListener(v -> sendCommand("showToast", "로봇 호출 기능이 요청되었습니다."));
+//        btnVoiceChat.setOnClickListener(v -> sendCommand("showToast", "대화하기 기능이 요청되었습니다."));
+//        btnCleaning.setOnClickListener(v -> sendCommand("showToast", "청소하기 기능이 요청되었습니다."));
+        btnRobotCall.setOnClickListener(v -> sendCommand("speak", "보호자님께서 호출하셨습니다."));
+        btnCleaning.setOnClickListener(v -> sendCommand("startCleaning", "청소를 시작하겠습니다."));
+        btnVoiceChat.setOnClickListener(v -> sendCommand("startVoiceChat", "Temi와 대화를 시작합니다."));
+        btnMedicine.setOnClickListener(v -> sendCommand("getMedicine", "약 관리 기능이 요청되었습니다."));
+
     }
 
     private void initializeUI() {
