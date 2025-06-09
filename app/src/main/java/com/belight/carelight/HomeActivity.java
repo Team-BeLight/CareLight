@@ -83,10 +83,19 @@ public class HomeActivity extends AppCompatActivity {
 //        btnRobotCall.setOnClickListener(v -> sendCommand("showToast", "로봇 호출 기능이 요청되었습니다."));
 //        btnVoiceChat.setOnClickListener(v -> sendCommand("showToast", "대화하기 기능이 요청되었습니다."));
 //        btnCleaning.setOnClickListener(v -> sendCommand("showToast", "청소하기 기능이 요청되었습니다."));
-        btnRobotCall.setOnClickListener(v -> sendCommand("speak", "보호자님께서 호출하셨습니다."));
-        btnCleaning.setOnClickListener(v -> sendCommand("startCleaning", "청소를 시작하겠습니다."));
-        btnVoiceChat.setOnClickListener(v -> sendCommand("startVoiceChat", "Temi와 대화를 시작합니다."));
-        btnMedicine.setOnClickListener(v -> sendCommand("getMedicine", "약 관리 기능이 요청되었습니다."));
+//        btnRobotCall.setOnClickListener(v -> sendCommand("speak", "보호자님께서 호출하셨습니다."));
+//        btnCleaning.setOnClickListener(v -> sendCommand("startCleaning", "청소를 시작하겠습니다."));
+//        btnVoiceChat.setOnClickListener(v -> sendCommand("startVoiceChat", "Temi와 대화를 시작합니다."));
+//        btnMedicine.setOnClickListener(v -> sendCommand("getMedicine", "약 관리 기능이 요청되었습니다."));
+        btnMedicine.setOnClickListener(v -> {
+            // 1. 파라미터 맵 생성
+            Map<String, Object> params = new HashMap<>();
+            params.put("location", "Room1");
+            params.put("angle", 90); // 90도 오른쪽 회전
+
+            // 2. 새로운 구조로 sendCommand 호출
+            sendCommand("getMedicine", "약 가지러 이동합니다.", params);
+        });
 
     }
 
@@ -101,7 +110,7 @@ public class HomeActivity extends AppCompatActivity {
         btnCleaning = findViewById(R.id.btn_cleaning);
     }
 
-    private void sendCommand(String command, String message) {
+    private void sendCommand(String command, String message,  Map<String, Object> parameters) {
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null) {
             Toast.makeText(this, "로그인이 필요합니다.", Toast.LENGTH_SHORT).show();
@@ -117,6 +126,7 @@ public class HomeActivity extends AppCompatActivity {
         Map<String, Object> commandData = new HashMap<>();
         commandData.put("command", command);
         commandData.put("message", message);
+        commandData.put("parameters", parameters);
         commandData.put("timestamp", FieldValue.serverTimestamp());
 
         // 'temiCommand' 필드 업데이트
