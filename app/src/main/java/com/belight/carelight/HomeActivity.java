@@ -98,8 +98,8 @@ public class HomeActivity extends AppCompatActivity {
 
     private void initializeUI() {
         tvRobotInfo = findViewById(R.id.tv_robot_info);
-        tvCurrentLocation = findViewById(R.id.textView6); // XML의 '현재 위치' TextView
-        tvBatteryStatus = findViewById(R.id.textView7);   // XML의 '배터리 상태' TextView
+        tvCurrentLocation = findViewById(R.id.textView6);
+        tvBatteryStatus = findViewById(R.id.tv_battery_status);
 
         btnGotoLocation = findViewById(R.id.btn_goto_location);
         btnRegisterLocation = findViewById(R.id.btn_register_location);
@@ -112,11 +112,9 @@ public class HomeActivity extends AppCompatActivity {
     private void setupRealtimeListeners() {
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null) {
-            // 로그인 안된 경우 처리 (기존과 동일)
             redirectToLogin();
             return;
         }
-
         String userUid = currentUser.getUid();
         final DocumentReference userDocRef = db.collection("users").document(userUid);
 
@@ -125,21 +123,17 @@ public class HomeActivity extends AppCompatActivity {
                 Log.w(TAG, "Listen failed.", e);
                 return;
             }
-
             if (snapshot != null && snapshot.exists()) {
                 // 사용자 기본 정보 업데이트
                 String robotId = snapshot.getString("robotId");
-                if (robotId == null) robotId = "정보 없음";
-                tvRobotInfo.setText(String.format("Care Light (%s)", robotId));
+                tvRobotInfo.setText(String.format("Care Light (%s)", robotId != null ? robotId : "연결 안됨"));
 
                 // 로봇 상태(robotState) 정보 실시간 업데이트
                 Object stateObj = snapshot.get("robotState");
                 if (stateObj instanceof Map) {
                     Map<String, Object> robotState = (Map<String, Object>) stateObj;
-
                     String currentLocation = (String) robotState.get("currentLocation");
                     tvCurrentLocation.setText(String.format("현재 위치: %s", currentLocation != null ? currentLocation : "알 수 없음"));
-
                     Number battery = (Number) robotState.get("batteryPercentage");
                     tvBatteryStatus.setText(String.format(Locale.getDefault(), "배터리 상태: %d%%", battery != null ? battery.intValue() : 0));
 
@@ -147,14 +141,27 @@ public class HomeActivity extends AppCompatActivity {
                     List<String> locations = (List<String>) robotState.get("savedLocations");
                     if (locations != null) {
                         this.robotLocations = locations;
-                        Log.d(TAG, "Updated robot locations: " + locations.toString());
+                        Log.d(TAG, "Updated robot locations: " + this.robotLocations);
                     }
                 }
             } else {
-                Log.w(TAG, "No such document for user UID: " + userUid);
-                tvRobotInfo.setText("사용자 프로필 정보를 찾을 수 없습니다.");
+                Log.w(TAG, "User document not found for UID: " + userUid);
             }
         });
+    }
+
+    private void setupButtonClickListeners() {
+        btnRegisterLocation.setOnClickListener(v -> showRegisterLocationDialog());
+        btnGotoLocation.setOnClickListener(v -> showLocationSelectionDialog());
+        btnRobotCall.setOnClickListener(v -> {
+            // '보호자' 라는 이름의 위치로 로봇을 호출하는 기능
+            // 이 기능을 사용하려면 사용자가 미리 '보호자' 라는 이름으로 자신의 위치를 등록해야 합니다.
+            sendCommand("goToLocation", "보호자님께 이동합니다.", new HashMap<String, Object>() {{
+                put("location", "보호자");
+                put("angle", 0);
+            }});
+        });
+        // TODO: btnVoiceChat, btnCleaning 에 대한 기능 구현 필요
     }
 
 
@@ -171,9 +178,9 @@ public class HomeActivity extends AppCompatActivity {
         builder.setPositiveButton("저장", (dialog, which) -> {
             String locationName = input.getText().toString().trim();
             if (!locationName.isEmpty()) {
-                Map<String, Object> params = new HashMap<>();
-                params.put("locationName", locationName);
-                sendCommand("saveLocation", "위치 저장 요청: " + locationName, params);
+                sendCommand("saveLocation", "위치 저장 요청: " + locationName, new HashMap<String, Object>() {{
+                    put("locationName", locationName);
+                }});
             } else {
                 Toast.makeText(this, "이름을 입력해주세요.", Toast.LENGTH_SHORT).show();
             }
@@ -188,34 +195,26 @@ public class HomeActivity extends AppCompatActivity {
             Toast.makeText(this, "저장된 장소가 없습니다. 먼저 장소를 등록해주세요.", Toast.LENGTH_SHORT).show();
             return;
         }
-
         final CharSequence[] items = robotLocations.toArray(new CharSequence[0]);
-
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("이동할 장소를 선택하세요");
         builder.setItems(items, (dialog, itemIndex) -> {
             String selectedLocation = (String) items[itemIndex];
-            float angle = 0f; // 기본 회전 각도
-
-            Map<String, Object> params = new HashMap<>();
-            params.put("location", selectedLocation);
-            params.put("angle", angle);
-            sendCommand("goToLocation", selectedLocation + "(으)로 이동합니다.", params);
+            sendCommand("goToLocation", selectedLocation + "(으)로 이동합니다.", new HashMap<String, Object>() {{
+                put("location", selectedLocation);
+                put("angle", 0); // 기본 회전 각도
+            }});
         });
         builder.show();
     }
 
-    private void sendCommand(String command, String message,  Map<String, Object> parameters) {
-
+    private void sendCommand(String command, String message, Map<String, Object> parameters) {
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null) {
             Toast.makeText(this, "로그인이 필요합니다.", Toast.LENGTH_SHORT).show();
             return;
         }
-
         String userUid = currentUser.getUid();
-
-        // 명령 데이터
         Map<String, Object> commandData = new HashMap<>();
         commandData.put("command", command);
         commandData.put("message", message);
@@ -224,17 +223,10 @@ public class HomeActivity extends AppCompatActivity {
         }
         commandData.put("timestamp", FieldValue.serverTimestamp());
 
-        // 'temiCommand' 필드 업데이트
         db.collection("users").document(userUid)
                 .update("temiCommand", commandData)
-                .addOnSuccessListener(aVoid -> {
-                    Toast.makeText(HomeActivity.this, "Temi에 명령을 전송했습니다.", Toast.LENGTH_SHORT).show();
-                    Log.d(TAG, "Command '" + command + "' sent successfully.");
-                })
-                .addOnFailureListener(e -> {
-                    Toast.makeText(HomeActivity.this, "명령 전송에 실패했습니다.", Toast.LENGTH_SHORT).show();
-                    Log.w(TAG, "Error sending command '" + command + "'", e);
-                });
+                .addOnSuccessListener(aVoid -> Toast.makeText(HomeActivity.this, "Temi에 명령을 전송했습니다.", Toast.LENGTH_SHORT).show())
+                .addOnFailureListener(e -> Toast.makeText(HomeActivity.this, "명령 전송에 실패했습니다.", Toast.LENGTH_SHORT).show());
     }
 
     private void redirectToLogin() {
