@@ -37,7 +37,7 @@ public class HomeActivity extends AppCompatActivity {
 
     // --- UI 요소 변수 ---
     private TextView tvRobotInfo, tvCurrentLocation, tvBatteryStatus;
-    private Button btnGotoLocation, btnRegisterLocation, btnRobotCall, btnVoiceChat, btnCleaning;
+    private Button btnGotoLocation, btnRegisterLocation, btnDeleteLocation, btnRobotCall, btnVoiceChat, btnCleaning;
 
     // --- Firebase 변수 ---
     private FirebaseAuth mAuth;
@@ -81,6 +81,7 @@ public class HomeActivity extends AppCompatActivity {
         // 디버깅 및 로그아웃 리스너
         setupDebugClickListener();
         setupLogoutClickListener();
+        setupButtonClickListeners();
 
         // --- 버튼 클릭 리스너 설정 ---
         btnRegisterLocation.setOnClickListener(v -> showRegisterLocationDialog());
@@ -103,6 +104,8 @@ public class HomeActivity extends AppCompatActivity {
 
         btnGotoLocation = findViewById(R.id.btn_goto_location);
         btnRegisterLocation = findViewById(R.id.btn_register_location);
+
+        btnDeleteLocation = findViewById(R.id.btn_delete_location);
 
         btnRobotCall = findViewById(R.id.btn_robot_call);
         btnVoiceChat = findViewById(R.id.btn_voice_chat);
@@ -153,9 +156,9 @@ public class HomeActivity extends AppCompatActivity {
     private void setupButtonClickListeners() {
         btnRegisterLocation.setOnClickListener(v -> showRegisterLocationDialog());
         btnGotoLocation.setOnClickListener(v -> showLocationSelectionDialog());
+        btnDeleteLocation.setOnClickListener(v -> showDeleteLocationDialog()); // 삭제 버튼 리스너 추가
+
         btnRobotCall.setOnClickListener(v -> {
-            // '보호자' 라는 이름의 위치로 로봇을 호출하는 기능
-            // 이 기능을 사용하려면 사용자가 미리 '보호자' 라는 이름으로 자신의 위치를 등록해야 합니다.
             sendCommand("goToLocation", "보호자님께 이동합니다.", new HashMap<String, Object>() {{
                 put("location", "보호자");
                 put("angle", 0);
@@ -164,6 +167,33 @@ public class HomeActivity extends AppCompatActivity {
         // TODO: btnVoiceChat, btnCleaning 에 대한 기능 구현 필요
     }
 
+
+    private void showDeleteLocationDialog() {
+        if (robotLocations == null || robotLocations.isEmpty()) {
+            Toast.makeText(this, "삭제할 장소가 없습니다.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final CharSequence[] items = robotLocations.toArray(new CharSequence[0]);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("삭제할 장소를 선택하세요");
+        builder.setItems(items, (dialog, itemIndex) -> {
+            String selectedLocation = (String) items[itemIndex];
+            // 사용자에게 정말 삭제할 것인지 다시 확인
+            new AlertDialog.Builder(HomeActivity.this)
+                    .setTitle("장소 삭제 확인")
+                    .setMessage("'" + selectedLocation + "' 장소를 정말 삭제하시겠습니까?")
+                    .setPositiveButton("삭제", (deleteDialog, which) -> {
+                        // "삭제"를 누르면 deleteLocation 명령 전송
+                        sendCommand("deleteLocation", "위치 삭제 요청: " + selectedLocation, new HashMap<String, Object>() {{
+                            put("locationName", selectedLocation);
+                        }});
+                    })
+                    .setNegativeButton("취소", null)
+                    .show();
+        });
+        builder.show();
+    }
 
     // [새로 추가됨] '현재 위치 등록' 다이얼로그 표시
     private void showRegisterLocationDialog() {
