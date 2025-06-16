@@ -282,16 +282,18 @@ public class SignupProfileActivity extends AppCompatActivity {
 
         // 통신을 위한 temiCommand 필드 초기값 설정
         Map<String, Object> initialCommand = new HashMap<>();
-        initialCommand.put("command", "none"); // 초기 상태는 "none" 또는 "idle"
+        initialCommand.put("command", "none");
         initialCommand.put("message", "No command");
-        initialCommand.put("timestamp", FieldValue.serverTimestamp()); // Firestore 서버 시간 기록
+        initialCommand.put("timestamp", FieldValue.serverTimestamp());
+        userProfile.put("temiCommand", initialCommand);
 
-        userProfile.put("temiCommand", initialCommand); // userProfile 맵에 추가
-
-//        SimpleDateFormat sdf = new SimpleDateFormat("yyyy년 MM월 dd일 HH:mm:ss z", Locale.getDefault());
-//        String formattedDate = sdf.format(new Date());
-//        userProfile.put("createdAt", formattedDate);
-//        userProfile.put("updatedAt", formattedDate);
+        // 로봇 상태 보고를 위한 robotState 필드 초기값 설정
+        Map<String, Object> initialRobotState = new HashMap<>();
+        initialRobotState.put("currentLocation", "Not available"); // 현재 위치
+        initialRobotState.put("batteryPercentage", -1); // 배터리 퍼센트
+        initialRobotState.put("statusMessage", "Initializing"); // 로봇 상태 메시지 (예: "충전 중", "경로 이동 중")
+        initialRobotState.put("savedLocations", new ArrayList<String>()); // 저장된 위치 목록 (빈 리스트로 초기화)
+        userProfile.put("robotState", initialRobotState);
 
         // createdAt, updatedAt 설정
         userProfile.put("createdAt", FieldValue.serverTimestamp());
