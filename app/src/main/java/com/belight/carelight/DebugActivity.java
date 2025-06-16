@@ -1,11 +1,13 @@
 package com.belight.carelight; // 본인의 패키지 이름으로 정확히 변경해주세요
 
+import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.view.MotionEvent;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -29,30 +31,44 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.FirebaseFirestore;
+
+import java.util.HashMap;
+import java.util.Map;
+
 public class DebugActivity extends AppCompatActivity {
 
     private static final String TAG = "DebugActivity";
 
+
+    // --- UI 변수 선언 ---
     private TextInputEditText etEspIpAddress;
     private Button btnFetchEspInfo;
-    private TextView tvEspName;
-    private TextView tvEspStatus;
-    private TextView tvEspWifiSsid;
-    private TextView tvCurrentServoAngle;
-    private TextView tvPulseSensorValue;
+    private TextView tvEspName, tvEspStatus, tvEspWifiSsid, tvCurrentServoAngle, tvPulseSensorValue;
     private TextInputEditText etServoAngle;
     private Button btnSetServoAngle;
+    private Button btnTemiUp, btnTemiDown, btnTemiLeft, btnTemiRight;
+    private Button btnTemiUpLeft, btnTemiUpRight, btnTemiDownLeft, btnTemiDownRight;
+    private Button btnTemiStop;
 
+    // --- 백그라운드 작업 및 통신 관련 변수 ---
     private final OkHttpClient client = new OkHttpClient();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-
-    private String currentEspIpAddress = "";
-
-    // 주기적 업데이트를 위한 핸들러 및 Runnable
     private Handler periodicUpdateHandler;
     private Runnable periodicUpdateRunnable;
-    private static final long UPDATE_INTERVAL_MS = 1000; // 1초 간격
+    private static final long UPDATE_INTERVAL_MS = 1000;
     private boolean isPollingActive = false;
+    private String currentEspIpAddress = "";
+    private FirebaseAuth mAuth;
+    private FirebaseFirestore db;
+
+    private final Handler temiControlHandler = new Handler(Looper.getMainLooper());
+    private Runnable temiControlRunnable;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,6 +81,17 @@ public class DebugActivity extends AppCompatActivity {
             return insets;
         });
 
+
+        initializeUI();
+        mAuth = FirebaseAuth.getInstance();
+        db = FirebaseFirestore.getInstance();
+
+        setupEspControlListeners();
+        setupTemiButtonListeners();
+        initializePeriodicUpdater();
+    }
+
+    private void initializeUI() {
         // UI 요소 초기화
         etEspIpAddress = findViewById(R.id.et_esp_ip_address);
         btnFetchEspInfo = findViewById(R.id.btn_fetch_esp_info);
@@ -76,65 +103,15 @@ public class DebugActivity extends AppCompatActivity {
         etServoAngle = findViewById(R.id.et_servo_angle);
         btnSetServoAngle = findViewById(R.id.btn_set_servo_angle);
 
-        // 주기적 업데이트 핸들러 및 Runnable 초기화
-        periodicUpdateHandler = new Handler(Looper.getMainLooper());
-        periodicUpdateRunnable = new Runnable() {
-            @Override
-            public void run() {
-                if (isPollingActive && !currentEspIpAddress.isEmpty()) {
-                    fetchEspInfoFromServer(currentEspIpAddress, true);
-                }
-                if (isPollingActive) {
-                    periodicUpdateHandler.postDelayed(this, UPDATE_INTERVAL_MS);
-                }
-            }
-        };
-
-        // "정보 갱신" 버튼 클릭 리스너
-        btnFetchEspInfo.setOnClickListener(v -> {
-            String ipAddress = "";
-            if (etEspIpAddress.getText() != null) {
-                ipAddress = etEspIpAddress.getText().toString().trim();
-            }
-
-            if (!ipAddress.isEmpty() && isValidIpAddress(ipAddress)) {
-                currentEspIpAddress = ipAddress; // IP 주소 저장 및 업데이트
-                stopPeriodicUpdates(); // 기존 폴링 중지 (IP가 변경될 수 있으므로)
-                fetchEspInfoFromServer(currentEspIpAddress, false); // 수동 요청이므로 Toast 표시
-                startPeriodicUpdates(); // 새 IP로 폴링 시작
-            } else {
-                stopPeriodicUpdates(); // 유효하지 않은 IP이므로 폴링 중지
-                Toast.makeText(DebugActivity.this, "유효한 ESP32 IP 주소를 입력해주세요.", Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        // "각도 설정" 버튼 클릭 리스너 (이전과 동일)
-        btnSetServoAngle.setOnClickListener(v -> {
-            if (currentEspIpAddress.isEmpty()) {
-                Toast.makeText(DebugActivity.this, "먼저 ESP32 IP 주소를 입력하고 정보 갱신을 해주세요.", Toast.LENGTH_LONG).show();
-                return;
-            }
-            String angleStr = "";
-            if (etServoAngle.getText() != null) {
-                angleStr = etServoAngle.getText().toString().trim();
-            }
-
-            if (angleStr.isEmpty()) {
-                Toast.makeText(DebugActivity.this, "설정할 각도를 입력해주세요.", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            try {
-                int angle = Integer.parseInt(angleStr);
-                if (angle >= 0 && angle <= 180) {
-                    setServoAngleOnEsp(currentEspIpAddress, angle);
-                } else {
-                    Toast.makeText(DebugActivity.this, "각도는 0에서 180 사이로 입력해주세요.", Toast.LENGTH_SHORT).show();
-                }
-            } catch (NumberFormatException e) {
-                Toast.makeText(DebugActivity.this, "유효한 숫자를 입력해주세요.", Toast.LENGTH_SHORT).show();
-            }
-        });
+        btnTemiUp = findViewById(R.id.btn_temi_up);
+        btnTemiDown = findViewById(R.id.btn_temi_down);
+        btnTemiLeft = findViewById(R.id.btn_temi_left);
+        btnTemiRight = findViewById(R.id.btn_temi_right);
+        btnTemiUpLeft = findViewById(R.id.btn_temi_up_left);
+        btnTemiUpRight = findViewById(R.id.btn_temi_up_right);
+        btnTemiDownLeft = findViewById(R.id.btn_temi_down_left);
+        btnTemiDownRight = findViewById(R.id.btn_temi_down_right);
+        btnTemiStop = findViewById(R.id.btn_temi_stop);
     }
 
     private void startPeriodicUpdates() {
@@ -170,6 +147,8 @@ public class DebugActivity extends AppCompatActivity {
         super.onPause();
         // 액티비티가 보이지 않을 때 주기적 업데이트 중지
         stopPeriodicUpdates();
+        temiControlHandler.removeCallbacksAndMessages(null);
+        sendSkidJoyCommand(0, 0); // 안전을 위해 정지 명령 전송
     }
 
 
@@ -315,4 +294,135 @@ public class DebugActivity extends AppCompatActivity {
             }
         });
     }
+
+    private void setupTemiButtonListeners() {
+        // 이동 속도 설정 (0.0 ~ 1.0)
+        final float SPEED = 0.7f;
+        final float DIAGONAL_SPEED = (float) (SPEED / Math.sqrt(2)); // 대각선 이동 시 속도 보정
+
+        // 방향 버튼 리스너 설정
+        setupDirectionalButton(btnTemiUp, SPEED, 0);                      // 위
+        setupDirectionalButton(btnTemiDown, -SPEED, 0);                   // 아래
+        setupDirectionalButton(btnTemiLeft, 0, SPEED);                    // 왼쪽
+        setupDirectionalButton(btnTemiRight, 0, -SPEED);                  // 오른쪽
+        setupDirectionalButton(btnTemiUpLeft, DIAGONAL_SPEED, SPEED);       // 왼위
+        setupDirectionalButton(btnTemiUpRight, DIAGONAL_SPEED, -SPEED);     // 오른위
+        setupDirectionalButton(btnTemiDownLeft, -DIAGONAL_SPEED, SPEED);    // 왼아래
+        setupDirectionalButton(btnTemiDownRight, -DIAGONAL_SPEED, -SPEED);  // 오른아래
+
+        // 정지 버튼은 간단한 클릭 리스너로 설정
+        btnTemiStop.setOnClickListener(v -> sendSkidJoyCommand(0, 0));
+    }
+    private void initializePeriodicUpdater() {
+        periodicUpdateHandler = new Handler(Looper.getMainLooper());
+        periodicUpdateRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (isPollingActive && !currentEspIpAddress.isEmpty()) {
+                    fetchEspInfoFromServer(currentEspIpAddress, true);
+                }
+                if (isPollingActive) {
+                    periodicUpdateHandler.postDelayed(this, UPDATE_INTERVAL_MS);
+                }
+            }
+        };
+    }
+
+    private void setupEspControlListeners() {
+        // "정보 갱신" 버튼 클릭 리스너
+        btnFetchEspInfo.setOnClickListener(v -> {
+            String ipAddress = etEspIpAddress.getText() != null ? etEspIpAddress.getText().toString().trim() : "";
+            if (!ipAddress.isEmpty() && isValidIpAddress(ipAddress)) {
+                currentEspIpAddress = ipAddress;
+                stopPeriodicUpdates();
+                fetchEspInfoFromServer(currentEspIpAddress, false);
+                startPeriodicUpdates();
+            } else {
+                stopPeriodicUpdates();
+                Toast.makeText(DebugActivity.this, "유효한 ESP32 IP 주소를 입력해주세요.", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        // "각도 설정" 버튼 클릭 리스너
+        btnSetServoAngle.setOnClickListener(v -> {
+            if (currentEspIpAddress.isEmpty()) {
+                Toast.makeText(DebugActivity.this, "먼저 ESP32 IP 주소를 입력하고 정보 갱신을 해주세요.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            String angleStr = etServoAngle.getText() != null ? etServoAngle.getText().toString().trim() : "";
+            if (angleStr.isEmpty()) {
+                Toast.makeText(DebugActivity.this, "설정할 각도를 입력해주세요.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            try {
+                int angle = Integer.parseInt(angleStr);
+                if (angle >= 0 && angle <= 180) {
+                    setServoAngleOnEsp(currentEspIpAddress, angle);
+                } else {
+                    Toast.makeText(DebugActivity.this, "각도는 0에서 180 사이로 입력해주세요.", Toast.LENGTH_SHORT).show();
+                }
+            } catch (NumberFormatException e) {
+                Toast.makeText(DebugActivity.this, "유효한 숫자를 입력해주세요.", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private void setupDirectionalButton(Button button, float linear, float angular) {
+        if (button == null) return;
+
+        button.setOnTouchListener((view, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    // 이전에 실행 중이던 다른 방향의 작업이 있다면 모두 중지
+                    temiControlHandler.removeCallbacksAndMessages(null);
+
+                    // 새로운 방향으로 주기적으로 이동 명령을 보내는 Runnable 생성
+                    temiControlRunnable = new Runnable() {
+                        @Override
+                        public void run() {
+                            // 이동 명령 전송
+                            sendSkidJoyCommand(linear, angular);
+                            // 150ms 후에 자기 자신을 다시 호출하여 반복 실행
+                            temiControlHandler.postDelayed(this, 150);
+                        }
+                    };
+                    // 생성한 작업을 즉시 시작
+                    temiControlHandler.post(temiControlRunnable);
+                    break;
+
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    // 버튼에서 손을 떼거나 터치가 취소되면,
+                    // 주기적으로 보내던 작업을 중지
+                    temiControlHandler.removeCallbacks(temiControlRunnable);
+                    // 로봇에 정지 명령 전송
+                    sendSkidJoyCommand(0, 0);
+                    break;
+            }
+            return true; // true를 반환하여 클릭 이벤트와 중복되지 않도록 함
+        });
+    }
+
+    private void sendSkidJoyCommand(float linear, float angular) {
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser == null) return;
+        String userUid = currentUser.getUid();
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("x", linear);
+        params.put("y", angular);
+
+        Map<String, Object> commandData = new HashMap<>();
+        commandData.put("command", "skidJoy");
+        commandData.put("message", String.format("SkidJoy: x=%.2f, y=%.2f", linear, angular));
+        commandData.put("parameters", params);
+        commandData.put("timestamp", FieldValue.serverTimestamp());
+
+        db.collection("users").document(userUid)
+                .update("temiCommand", commandData)
+                .addOnSuccessListener(aVoid -> Log.d(TAG, "skidJoy command sent successfully."))
+                .addOnFailureListener(e -> Log.w(TAG, "Error sending skidJoy command", e));
+    }
+
 }
