@@ -3,6 +3,15 @@ plugins {
     id 'com.google.gms.google-services'
 }
 
+def getApiKey(property) {
+    def properties = new Properties()
+    def localPropertiesFile = project.rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        properties.load(new FileInputStream(localPropertiesFile))
+    }
+    return properties.getProperty(property) ?: ""
+}
+
 android {
     namespace 'com.belight.carelight'
     compileSdk 35
@@ -15,6 +24,7 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField "String", "PERPLEXITY_API_KEY", "\"${getApiKey('PERPLEXITY_API_KEY')}\""
     }
 
     buildTypes {
