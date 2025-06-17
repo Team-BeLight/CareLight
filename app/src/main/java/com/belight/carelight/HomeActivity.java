@@ -117,24 +117,33 @@ public class HomeActivity extends AppCompatActivity {
                 return;
             }
             if (snapshot != null && snapshot.exists()) {
-                // 사용자 기본 정보 업데이트
                 String robotId = snapshot.getString("robotId");
                 tvRobotInfo.setText(String.format("Care Light (%s)", robotId != null ? robotId : "연결 안됨"));
-
-                // 로봇 상태(robotState) 정보 실시간 업데이트
                 Object stateObj = snapshot.get("robotState");
                 if (stateObj instanceof Map) {
                     Map<String, Object> robotState = (Map<String, Object>) stateObj;
                     String currentLocation = (String) robotState.get("currentLocation");
                     tvRobotLocation.setText(String.format("로봇 위치: %s", currentLocation != null ? currentLocation : "알 수 없음"));
-                    Number battery = (Number) robotState.get("batteryPercentage");
-                    tvBatteryStatus.setText(String.format(Locale.getDefault(), "배터리 상태: %d%%", battery != null ? battery.intValue() : 0));
 
-                    // 저장된 위치 목록 업데이트
+                    Number battery = (Number) robotState.get("batteryPercentage");
+                    Boolean isCharging = (Boolean) robotState.get("isCharging");
+
+                    // isCharging이 null일 경우(초기 상태 등)를 대비하여 false로 기본값 설정
+                    boolean charging = (isCharging != null) && isCharging;
+
+                    String batteryText;
+                    int percentage = (battery != null) ? battery.intValue() : 0;
+
+                    if (charging) {
+                        batteryText = String.format(Locale.getDefault(), "배터리 상태: %d%% (충전 중)", percentage);
+                    } else {
+                        batteryText = String.format(Locale.getDefault(), "배터리 상태: %d%%", percentage);
+                    }
+                    tvBatteryStatus.setText(batteryText);
+
                     List<String> locations = (List<String>) robotState.get("savedLocations");
                     if (locations != null) {
                         this.robotLocations = locations;
-                        Log.d(TAG, "Updated robot locations: " + this.robotLocations);
                     }
                 }
             } else {
