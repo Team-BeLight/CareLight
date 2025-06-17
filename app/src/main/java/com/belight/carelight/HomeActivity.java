@@ -26,6 +26,8 @@ import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FieldValue;
 
+import com.belight.carelight.ChatbotDialogFragment;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
@@ -158,8 +160,13 @@ public class HomeActivity extends AppCompatActivity {
 
         // 중앙 그리드 버튼
         btnGetMedicine.setOnClickListener(v -> callRobotForTask("약 전달"));
+
         btnRobotCall.setOnClickListener(v -> callRobotForTask("호출"));
-        // TODO: btnVoiceChat, btnCleaning 에 대한 기능 구현 필요
+
+        btnVoiceChat.setOnClickListener(v -> {
+            ChatbotDialogFragment chatbotDialog = new ChatbotDialogFragment();
+            chatbotDialog.show(getSupportFragmentManager(), "ChatbotDialog");
+        });
 
         // 하단 카드 버튼
         btnRegisterLocation.setOnClickListener(v -> showRegisterLocationDialog());

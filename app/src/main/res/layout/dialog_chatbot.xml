@@ -18,7 +18,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Temi와 대화하기"
+        android:text="CareLight와 대화하기"
         android:textSize="22sp"
         android:textStyle="bold"
         android:layout_gravity="center_horizontal"
@@ -49,7 +49,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:hint="Temi에게 메시지 보내기"
+            android:hint="CareLight에게 메시지 보내기"
             android:inputType="textShortMessage"
             android:maxLines="3"
             android:background="@drawable/bg_chat_bubble_bot"
