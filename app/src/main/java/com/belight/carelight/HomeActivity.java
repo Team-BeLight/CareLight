@@ -38,7 +38,8 @@ public class HomeActivity extends AppCompatActivity {
 
     // --- UI 요소 변수 ---
     private TextView tvRobotInfo, tvRobotLocation, tvUserLocation, tvBatteryStatus;
-    private Button btnGotoLocation, btnRegisterLocation, btnDeleteLocation, btnRobotCall, btnSetUserLocation;
+    private Button btnGetMedicine, btnRobotCall, btnVoiceChat, btnCleaning;
+    private Button btnGotoLocation, btnRegisterLocation, btnDeleteLocation, btnSetUserLocation;
     private CardView cvTopMenu;
 
     // --- Firebase 변수 ---
@@ -82,18 +83,23 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     private void initializeUI() {
+        // 상단 카드
         tvRobotInfo = findViewById(R.id.tv_robot_info);
         tvRobotLocation = findViewById(R.id.tv_robot_location);
         tvUserLocation = findViewById(R.id.tv_user_location);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
-        cvTopMenu = findViewById(R.id.cv_top_menu);
+        btnSetUserLocation = findViewById(R.id.btn_set_user_location);
 
-        // 버튼 초기화
+        // 중앙 그리드
+        btnGetMedicine = findViewById(R.id.btn_get_medicine);
+        btnRobotCall = findViewById(R.id.btn_robot_call);
+        btnVoiceChat = findViewById(R.id.btn_voice_chat);
+        btnCleaning = findViewById(R.id.btn_cleaning);
+
+        // 하단 카드
         btnGotoLocation = findViewById(R.id.btn_goto_location);
         btnRegisterLocation = findViewById(R.id.btn_register_location);
         btnDeleteLocation = findViewById(R.id.btn_delete_location);
-        btnRobotCall = findViewById(R.id.btn_robot_call);
-        btnSetUserLocation = findViewById(R.id.btn_set_user_location);
     }
 
     private void setupRealtimeListeners() {
@@ -138,31 +144,35 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     private void setupButtonClickListeners() {
+        // 상단 카드 버튼
         btnSetUserLocation.setOnClickListener(v -> showSetUserLocationDialog());
+
+        // 중앙 그리드 버튼
+        btnGetMedicine.setOnClickListener(v -> callRobotForTask("약 전달"));
+        btnRobotCall.setOnClickListener(v -> callRobotForTask("호출"));
+        // TODO: btnVoiceChat, btnCleaning 에 대한 기능 구현 필요
+
+        // 하단 카드 버튼
         btnRegisterLocation.setOnClickListener(v -> showRegisterLocationDialog());
         btnGotoLocation.setOnClickListener(v -> showLocationSelectionDialog());
         btnDeleteLocation.setOnClickListener(v -> showDeleteLocationDialog());
+    }
 
-        btnRobotCall.setOnClickListener(v -> {
-            // SharedPreferences에서 저장된 사용자 위치를 가져옴.
-            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-            String userLocation = prefs.getString("user_location", "(지정 안됨)");
+    private void callRobotForTask(String taskName) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        String userLocation = prefs.getString("user_location", "(지정 안됨)");
 
-            // 사용자 위치가 설정되었는지 확인함.
-            if (userLocation.equals("(지정 안됨)")) {
-                // 설정되지 않았다면, 사용자에게 안내 메시지를 표시함.
-                Toast.makeText(this, "먼저 '사용자 위치'를 설정해주세요!", Toast.LENGTH_LONG).show();
-            } else {
-                // 설정되었다면, 해당 위치로 로봇을 호출하는 명령을 전송함.
-                Log.d(TAG, "Calling robot to user's location: " + userLocation);
-                Map<String, Object> params = new HashMap<>();
-                params.put("location", userLocation);
-                params.put("angle", 0);
-                sendCommand("goToLocation", userLocation + "(으)로 이동합니다.", params);
-            }
-        });
+        if (userLocation.equals("(지정 안됨)")) {
+            Toast.makeText(this, "먼저 '사용자 위치'를 설정해주세요!", Toast.LENGTH_LONG).show();
+        } else {
+            Toast.makeText(this, "'" + userLocation + "'(으)로 " + taskName + "을(를) 요청했습니다.", Toast.LENGTH_SHORT).show();
+            Log.d(TAG, "Calling robot for task '" + taskName + "' to location: " + userLocation);
 
-        // TODO: btnVoiceChat, btnCleaning 에 대한 기능 구현 필요
+            Map<String, Object> params = new HashMap<>();
+            params.put("location", userLocation);
+            params.put("angle", 0); // 로봇이 도착해서 사용자를 바라보도록 0도 설정
+            sendCommand("goToLocation", userLocation + "(으)로 " + taskName + "을(를) 위해 이동합니다.", params);
+        }
     }
 
     private void showSetUserLocationDialog() {
@@ -206,7 +216,7 @@ public class HomeActivity extends AppCompatActivity {
         builder.setTitle("삭제할 장소를 선택하세요");
         builder.setItems(items, (dialog, itemIndex) -> {
             String selectedLocation = (String) items[itemIndex];
-            // 사용자에게 정말 삭제할 것인지 다시 확인
+            // 사용자에게 정말 삭제할 것인지 다시 확인함.
             new AlertDialog.Builder(HomeActivity.this)
                     .setTitle("장소 삭제 확인")
                     .setMessage("'" + selectedLocation + "' 장소를 정말 삭제하시겠습니까?")
@@ -224,44 +234,42 @@ public class HomeActivity extends AppCompatActivity {
 
 
     private void showRegisterLocationDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("현재 위치 등록");
-        builder.setMessage("로봇의 현재 위치를 저장할 이름을 입력하세요.");
-
         final EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_TEXT);
-        builder.setView(input);
-
-        builder.setPositiveButton("저장", (dialog, which) -> {
-            String locationName = input.getText().toString().trim();
-            if (!locationName.isEmpty()) {
-                sendCommand("saveLocation", "위치 저장 요청: " + locationName, new HashMap<String, Object>() {{
-                    put("locationName", locationName);
-                }});
-            } else {
-                Toast.makeText(this, "이름을 입력해주세요.", Toast.LENGTH_SHORT).show();
-            }
-        });
-        builder.setNegativeButton("취소", (dialog, which) -> dialog.cancel());
-        builder.show();
+        new AlertDialog.Builder(this)
+            .setTitle("현재 위치 등록")
+            .setMessage("로봇의 현재 위치를 저장할 이름을 입력하세요.")
+            .setView(input)
+            .setPositiveButton("저장", (dialog, which) -> {
+                String locationName = input.getText().toString().trim();
+                if (!locationName.isEmpty()) {
+                    sendCommand("saveLocation", "위치 저장 요청: " + locationName, new HashMap<String, Object>() {{
+                        put("locationName", locationName);
+                    }});
+                } else {
+                    Toast.makeText(this, "이름을 입력해주세요.", Toast.LENGTH_SHORT).show();
+                }
+            })
+            .setNegativeButton("취소", null)
+            .show();
     }
 
     private void showLocationSelectionDialog() {
         if (robotLocations == null || robotLocations.isEmpty()) {
-            Toast.makeText(this, "저장된 장소가 없습니다. 먼저 장소를 등록해주세요.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "저장된 장소가 없습니다.", Toast.LENGTH_SHORT).show();
             return;
         }
         final CharSequence[] items = robotLocations.toArray(new CharSequence[0]);
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("이동할 장소를 선택하세요");
-        builder.setItems(items, (dialog, itemIndex) -> {
-            String selectedLocation = (String) items[itemIndex];
-            sendCommand("goToLocation", selectedLocation + "(으)로 이동합니다.", new HashMap<String, Object>() {{
-                put("location", selectedLocation);
-                put("angle", 0); // 기본 회전 각도
-            }});
-        });
-        builder.show();
+        new AlertDialog.Builder(this)
+            .setTitle("이동할 장소를 선택하세요")
+            .setItems(items, (dialog, itemIndex) -> {
+                String selectedLocation = (String) items[itemIndex];
+                sendCommand("goToLocation", selectedLocation + "(으)로 이동합니다.", new HashMap<String, Object>() {{
+                    put("location", selectedLocation);
+                    put("angle", 0);
+                }});
+            })
+            .show();
     }
 
     private void sendCommand(String command, String message, Map<String, Object> parameters) {
@@ -281,8 +289,8 @@ public class HomeActivity extends AppCompatActivity {
 
         db.collection("users").document(userUid)
                 .update("temiCommand", commandData)
-                .addOnSuccessListener(aVoid -> Toast.makeText(HomeActivity.this, "Temi에 명령을 전송했습니다.", Toast.LENGTH_SHORT).show())
-                .addOnFailureListener(e -> Toast.makeText(HomeActivity.this, "명령 전송에 실패했습니다.", Toast.LENGTH_SHORT).show());
+                .addOnSuccessListener(aVoid -> Log.d(TAG, "Command '" + command + "' sent successfully."))
+                .addOnFailureListener(e -> Log.w(TAG, "Error sending command", e));
     }
 
     private void redirectToLogin() {
