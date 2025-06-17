@@ -1,6 +1,5 @@
 package com.belight.carelight;
 
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
@@ -10,34 +9,37 @@ import android.widget.TextView;
 import android.widget.EditText;
 import android.widget.Toast;
 import android.widget.Button;
+import android.content.SharedPreferences;
+import android.preference.PreferenceManager;
 
 import androidx.activity.EdgeToEdge;
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.cardview.widget.CardView;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.FieldValue; // FieldValue import 추가
+import com.google.firebase.firestore.FieldValue;
 
 import java.util.ArrayList;
-import java.util.HashMap; // HashMap import 추가
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.List;
-import java.util.Map;   // Map import 추가
+import java.util.Map;
 
 public class HomeActivity extends AppCompatActivity {
 
     private static final String TAG = "HomeActivity";
 
     // --- UI 요소 변수 ---
-    private TextView tvRobotInfo, tvCurrentLocation, tvBatteryStatus;
-    private Button btnGotoLocation, btnRegisterLocation, btnDeleteLocation, btnRobotCall, btnVoiceChat, btnCleaning;
+    private TextView tvRobotInfo, tvRobotLocation, tvUserLocation, tvBatteryStatus;
+    private Button btnGotoLocation, btnRegisterLocation, btnDeleteLocation, btnRobotCall, btnSetUserLocation;
+    private CardView cvTopMenu;
 
     // --- Firebase 변수 ---
     private FirebaseAuth mAuth;
@@ -82,34 +84,22 @@ public class HomeActivity extends AppCompatActivity {
         setupDebugClickListener();
         setupLogoutClickListener();
         setupButtonClickListeners();
-
-        // --- 버튼 클릭 리스너 설정 ---
-        btnRegisterLocation.setOnClickListener(v -> showRegisterLocationDialog());
-        btnGotoLocation.setOnClickListener(v -> showLocationSelectionDialog());
-        btnRobotCall.setOnClickListener(v -> {
-            // '보호자' 라는 이름으로 미리 위치를 등록했다고 가정하고 해당 위치로 호출
-            Map<String, Object> params = new HashMap<>();
-            params.put("location", "보호자"); // 약속된 위치 이름
-            params.put("angle", 0);
-            sendCommand("goToLocation", "보호자님께 이동합니다.", params);
-        });
-        // TODO: btnVoiceChat, btnCleaning 에 대한 기능 구현
-
+        loadUserLocation();
     }
 
     private void initializeUI() {
         tvRobotInfo = findViewById(R.id.tv_robot_info);
-        tvCurrentLocation = findViewById(R.id.textView6);
+        tvRobotLocation = findViewById(R.id.tv_robot_location);
+        tvUserLocation = findViewById(R.id.tv_user_location);
         tvBatteryStatus = findViewById(R.id.tv_battery_status);
+        cvTopMenu = findViewById(R.id.cv_top_menu);
 
+        // 버튼 초기화
         btnGotoLocation = findViewById(R.id.btn_goto_location);
         btnRegisterLocation = findViewById(R.id.btn_register_location);
-
         btnDeleteLocation = findViewById(R.id.btn_delete_location);
-
         btnRobotCall = findViewById(R.id.btn_robot_call);
-        btnVoiceChat = findViewById(R.id.btn_voice_chat);
-        btnCleaning = findViewById(R.id.btn_cleaning);
+        btnSetUserLocation = findViewById(R.id.btn_set_user_location);
     }
 
     private void setupRealtimeListeners() {
@@ -136,7 +126,7 @@ public class HomeActivity extends AppCompatActivity {
                 if (stateObj instanceof Map) {
                     Map<String, Object> robotState = (Map<String, Object>) stateObj;
                     String currentLocation = (String) robotState.get("currentLocation");
-                    tvCurrentLocation.setText(String.format("현재 위치: %s", currentLocation != null ? currentLocation : "알 수 없음"));
+                    tvRobotLocation.setText(String.format("로봇 위치: %s", currentLocation != null ? currentLocation : "알 수 없음"));
                     Number battery = (Number) robotState.get("batteryPercentage");
                     tvBatteryStatus.setText(String.format(Locale.getDefault(), "배터리 상태: %d%%", battery != null ? battery.intValue() : 0));
 
@@ -156,7 +146,8 @@ public class HomeActivity extends AppCompatActivity {
     private void setupButtonClickListeners() {
         btnRegisterLocation.setOnClickListener(v -> showRegisterLocationDialog());
         btnGotoLocation.setOnClickListener(v -> showLocationSelectionDialog());
-        btnDeleteLocation.setOnClickListener(v -> showDeleteLocationDialog()); // 삭제 버튼 리스너 추가
+        btnDeleteLocation.setOnClickListener(v -> showDeleteLocationDialog());
+        btnSetUserLocation.setOnClickListener(v -> showSetUserLocationDialog());
 
         btnRobotCall.setOnClickListener(v -> {
             sendCommand("goToLocation", "보호자님께 이동합니다.", new HashMap<String, Object>() {{
@@ -167,6 +158,35 @@ public class HomeActivity extends AppCompatActivity {
         // TODO: btnVoiceChat, btnCleaning 에 대한 기능 구현 필요
     }
 
+    private void showSetUserLocationDialog() {
+        if (robotLocations == null || robotLocations.isEmpty()) {
+            Toast.makeText(this, "먼저 로봇에 장소를 등록해주세요.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final CharSequence[] items = robotLocations.toArray(new CharSequence[0]);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("사용자 현재 위치를 선택하세요");
+        builder.setItems(items, (dialog, itemIndex) -> {
+            String selectedLocation = (String) items[itemIndex];
+            tvUserLocation.setText(String.format("사용자 위치: %s", selectedLocation));
+            saveUserLocation(selectedLocation);
+            Toast.makeText(this, "사용자 위치를 '" + selectedLocation + "'(으)로 설정했습니다.", Toast.LENGTH_SHORT).show();
+        });
+        builder.show();
+    }
+
+    private void saveUserLocation(String location) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putString("user_location", location);
+        editor.apply();
+    }
+
+    private void loadUserLocation() {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        String savedLocation = prefs.getString("user_location", "(지정 안됨)");
+        tvUserLocation.setText(String.format("사용자 위치: %s", savedLocation));
+    }
 
     private void showDeleteLocationDialog() {
         if (robotLocations == null || robotLocations.isEmpty()) {
@@ -195,7 +215,7 @@ public class HomeActivity extends AppCompatActivity {
         builder.show();
     }
 
-    // [새로 추가됨] '현재 위치 등록' 다이얼로그 표시
+
     private void showRegisterLocationDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("현재 위치 등록");
@@ -219,7 +239,6 @@ public class HomeActivity extends AppCompatActivity {
         builder.show();
     }
 
-    // [새로 추가됨] '장소 선택' 다이얼로그 표시
     private void showLocationSelectionDialog() {
         if (robotLocations == null || robotLocations.isEmpty()) {
             Toast.makeText(this, "저장된 장소가 없습니다. 먼저 장소를 등록해주세요.", Toast.LENGTH_SHORT).show();
