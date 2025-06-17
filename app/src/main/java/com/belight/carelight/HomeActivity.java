@@ -69,22 +69,16 @@ public class HomeActivity extends AppCompatActivity {
             return insets;
         });
 
-
-        // Firebase 인스턴스 초기화
+        // 초기화 메소드 호출
+        initializeUI();
         mAuth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
-
-        // UI 요소 초기화
-        initializeUI();
-
-        // 사용자 데이터 및 로봇 상태 리스너 설정
-        setupRealtimeListeners();
-
-        // 디버깅 및 로그아웃 리스너
-        setupDebugClickListener();
-        setupLogoutClickListener();
-        setupButtonClickListeners();
         loadUserLocation();
+
+        // 리스너 설정
+        setupRealtimeListeners();
+        setupButtonClickListeners();
+        setupHiddenFeatureListeners();
     }
 
     private void initializeUI() {
@@ -144,17 +138,30 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     private void setupButtonClickListeners() {
+        btnSetUserLocation.setOnClickListener(v -> showSetUserLocationDialog());
         btnRegisterLocation.setOnClickListener(v -> showRegisterLocationDialog());
         btnGotoLocation.setOnClickListener(v -> showLocationSelectionDialog());
         btnDeleteLocation.setOnClickListener(v -> showDeleteLocationDialog());
-        btnSetUserLocation.setOnClickListener(v -> showSetUserLocationDialog());
 
         btnRobotCall.setOnClickListener(v -> {
-            sendCommand("goToLocation", "보호자님께 이동합니다.", new HashMap<String, Object>() {{
-                put("location", "보호자");
-                put("angle", 0);
-            }});
+            // SharedPreferences에서 저장된 사용자 위치를 가져옴.
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+            String userLocation = prefs.getString("user_location", "(지정 안됨)");
+
+            // 사용자 위치가 설정되었는지 확인함.
+            if (userLocation.equals("(지정 안됨)")) {
+                // 설정되지 않았다면, 사용자에게 안내 메시지를 표시함.
+                Toast.makeText(this, "먼저 '사용자 위치'를 설정해주세요!", Toast.LENGTH_LONG).show();
+            } else {
+                // 설정되었다면, 해당 위치로 로봇을 호출하는 명령을 전송함.
+                Log.d(TAG, "Calling robot to user's location: " + userLocation);
+                Map<String, Object> params = new HashMap<>();
+                params.put("location", userLocation);
+                params.put("angle", 0);
+                sendCommand("goToLocation", userLocation + "(으)로 이동합니다.", params);
+            }
         });
+
         // TODO: btnVoiceChat, btnCleaning 에 대한 기능 구현 필요
     }
 
@@ -370,5 +377,10 @@ public class HomeActivity extends AppCompatActivity {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();
+    }
+
+    private void setupHiddenFeatureListeners() {
+        setupDebugClickListener();
+        setupLogoutClickListener();
     }
 }
