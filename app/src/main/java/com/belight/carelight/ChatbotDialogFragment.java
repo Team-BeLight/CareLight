@@ -15,7 +15,6 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -71,7 +70,7 @@ public class ChatbotDialogFragment extends BottomSheetDialogFragment {
         rvChatMessages.setLayoutManager(layoutManager);
         rvChatMessages.setAdapter(chatAdapter);
 
-        addBotMessage("안녕하세요! 어르신을 위한 생활 도우미 Care Light입니다. 무엇이든 물어보세요.");
+        addBotMessage("안녕하세요, 저는 어르신의 다정한 대화 친구 'Care Light'예요. 무엇을 도와드릴까요?");
 
         btnSendChat.setOnClickListener(v -> sendMessage());
     }
@@ -83,38 +82,22 @@ public class ChatbotDialogFragment extends BottomSheetDialogFragment {
             etChatInput.setText("");
             addBotMessage("생각 중...");
             setUiEnabled(false);
-            callPerplexityApi(messageText);
+            callPerplexityApi();
         }
     }
 
-    private void callPerplexityApi(String userMessage) {
+    private void callPerplexityApi() {
         if (BuildConfig.PERPLEXITY_API_KEY == null || BuildConfig.PERPLEXITY_API_KEY.isEmpty()) {
-            updateLastBotMessage("API 키가 설정되지 않았습니다. local.properties 파일을 확인해주세요.");
-            setUiEnabled(true);
+            handleApiError("API 키가 설정되지 않았습니다. local.properties 파일을 확인해주세요.");
             return;
         }
 
-        MediaType mediaType = MediaType.parse("application/json");
+        MediaType mediaType = MediaType.parse("application/json; charset=utf-8");
+        JSONObject jsonBody;
 
-        JSONObject jsonBody = new JSONObject();
-        JSONArray messagesArray = new JSONArray();
         try {
-            //시스템 메시지 (봇의 역할 부여)
-            JSONObject systemMessage = new JSONObject();
-            systemMessage.put("role", "system");
-            systemMessage.put("content", "You are a helpful and friendly assistant for elderly care. Please answer in Korean.");
-            messagesArray.put(systemMessage);
-
-            // 사용자 역할 설정
-            JSONObject userMessageJson = new JSONObject();
-            userMessageJson.put("role", "user");
-            userMessageJson.put("content", userMessage);
-            messagesArray.put(userMessageJson);
-
-            // 모델 설정
-            jsonBody.put("model", "sonar");
-            jsonBody.put("messages", messagesArray);
-
+            // PromptFormatter를 사용해 전체 대화 기록을 바탕으로 요청 본문을 생성함.
+            jsonBody = PromptFormatter.createApiRequestBody(messageList);
         } catch (JSONException e) {
             Log.e(TAG, "JSON Exception: ", e);
             handleApiError("요청 생성 중 오류가 발생했습니다.");
@@ -126,7 +109,6 @@ public class ChatbotDialogFragment extends BottomSheetDialogFragment {
                 .url("https://api.perplexity.ai/chat/completions")
                 .post(body)
                 .addHeader("accept", "application/json")
-                .addHeader("content-type", "application/json")
                 .addHeader("authorization", "Bearer " + BuildConfig.PERPLEXITY_API_KEY)
                 .build();
 
@@ -138,13 +120,11 @@ public class ChatbotDialogFragment extends BottomSheetDialogFragment {
 
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) {
-                // 응답 실패 시, 응답 본문을 읽어서 로그에 남김
                 try (ResponseBody responseBody = response.body()) {
                     String responseString = (responseBody != null) ? responseBody.string() : "";
-
                     if (!response.isSuccessful()) {
                         Log.e(TAG, "API Call Unsuccessful: " + response.code());
-                        Log.e(TAG, "Error Body: " + responseString); // 서버가 보낸 오류 메시지 확인
+                        Log.e(TAG, "Error Body: " + responseString);
                         handleApiError("API 호출에 실패했습니다. (코드: " + response.code() + ")");
                         return;
                     }
