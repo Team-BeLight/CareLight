@@ -46,7 +46,6 @@ public class HomeActivity extends AppCompatActivity {
     private TextView tvRobotInfo, tvRobotLocation, tvUserLocation, tvBatteryStatus, tvMedicationStatus;
     private Button btnGetMedicine, btnRobotCall, btnVoiceChat, btnCleaning;
     private Button btnGotoLocation, btnRegisterLocation, btnDeleteLocation, btnSetUserLocation;
-    private Button btnConfirmMedication;
     private CardView cvTopMenu;
 
     // --- Firebase 변수 ---
@@ -112,7 +111,6 @@ public class HomeActivity extends AppCompatActivity {
 
         // 약 관련
         tvMedicationStatus = findViewById(R.id.tv_medication_status);
-        btnConfirmMedication = findViewById(R.id.btn_confirm_medication);
     }
 
     @Override
@@ -209,14 +207,6 @@ public class HomeActivity extends AppCompatActivity {
         btnRegisterLocation.setOnClickListener(v -> showRegisterLocationDialog());
         btnGotoLocation.setOnClickListener(v -> showLocationSelectionDialog());
         btnDeleteLocation.setOnClickListener(v -> showDeleteLocationDialog());
-
-        btnConfirmMedication.setOnClickListener(v -> {
-            updateMedicationStatus(true);
-            String todayDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
-            updateLastMedicationDate(todayDate);
-            sendCommand("medicationConfirmed", "약 복용이 확인되었습니다.", null);
-            Toast.makeText(this, "약 복용 완료를 기록했습니다.", Toast.LENGTH_SHORT).show();
-        });
     }
 
     private void callRobotForTask(String taskName) {
@@ -502,17 +492,14 @@ public class HomeActivity extends AppCompatActivity {
             statusText = "복용 완료";
             tvMedicationStatus.setText(statusText);
             tvMedicationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark));
-            btnConfirmMedication.setEnabled(false);
         } else if (isTaken != null) {
             statusText = "복용 전 (시간 지남)";
             tvMedicationStatus.setText("복용 전");
             tvMedicationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark));
-            btnConfirmMedication.setEnabled(true);
         } else {
             statusText = "복용 전 (대기 중)";
             tvMedicationStatus.setText("복용 전");
             tvMedicationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray));
-            btnConfirmMedication.setEnabled(false);
         }
         // Firestore에 상태 업데이트
         updateFirestoreMedicationStatus(statusText);
