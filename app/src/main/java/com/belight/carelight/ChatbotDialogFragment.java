@@ -1,28 +1,48 @@
 package com.belight.carelight;
 
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.ImageButton;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 public class ChatbotDialogFragment extends BottomSheetDialogFragment {
 
+    private static final String TAG = "ChatbotDialog";
     private RecyclerView rvChatMessages;
     private EditText etChatInput;
     private ImageButton btnSendChat;
     private ChatAdapter chatAdapter;
     private List<ChatMessage> messageList;
+
+    private OkHttpClient client;
 
     @Nullable
     @Override
@@ -33,6 +53,12 @@ public class ChatbotDialogFragment extends BottomSheetDialogFragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+
+        client = new OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .build();
 
         rvChatMessages = view.findViewById(R.id.rv_chat_messages);
         etChatInput = view.findViewById(R.id.et_chat_input);
@@ -45,8 +71,7 @@ public class ChatbotDialogFragment extends BottomSheetDialogFragment {
         rvChatMessages.setLayoutManager(layoutManager);
         rvChatMessages.setAdapter(chatAdapter);
 
-        // 시작 메시지 추가
-        addBotMessage("안녕하세요! 무엇을 도와드릴까요?");
+        addBotMessage("안녕하세요! 어르신을 위한 생활 도우미 Care Light입니다. 무엇이든 물어보세요.");
 
         btnSendChat.setOnClickListener(v -> sendMessage());
     }
@@ -54,13 +79,102 @@ public class ChatbotDialogFragment extends BottomSheetDialogFragment {
     private void sendMessage() {
         String messageText = etChatInput.getText().toString().trim();
         if (!messageText.isEmpty()) {
-            // 사용자 메시지 추가
             addUserMessage(messageText);
             etChatInput.setText("");
+            addBotMessage("생각 중...");
+            setUiEnabled(false);
+            callPerplexityApi(messageText);
+        }
+    }
 
-            // TODO: 여기에 Perplexity API 호출 로직을 추가해야 함. 사용법은 Docs 봐야할 듯.
-            // 지금은 임시로 봇 응답을 시뮬레이션함.
-            simulateBotResponse(messageText);
+    private void callPerplexityApi(String userMessage) {
+        if (BuildConfig.PERPLEXITY_API_KEY == null || BuildConfig.PERPLEXITY_API_KEY.isEmpty()) {
+            updateLastBotMessage("API 키가 설정되지 않았습니다. local.properties 파일을 확인해주세요.");
+            setUiEnabled(true);
+            return;
+        }
+
+        MediaType mediaType = MediaType.parse("application/json");
+
+        JSONObject jsonBody = new JSONObject();
+        JSONArray messagesArray = new JSONArray();
+        try {
+            //시스템 메시지 (봇의 역할 부여)
+            JSONObject systemMessage = new JSONObject();
+            systemMessage.put("role", "system");
+            systemMessage.put("content", "You are a helpful and friendly assistant for elderly care. Please answer in Korean.");
+            messagesArray.put(systemMessage);
+
+            // 사용자 역할 설정
+            JSONObject userMessageJson = new JSONObject();
+            userMessageJson.put("role", "user");
+            userMessageJson.put("content", userMessage);
+            messagesArray.put(userMessageJson);
+
+            // 모델 설정
+            jsonBody.put("model", "sonar");
+            jsonBody.put("messages", messagesArray);
+
+        } catch (JSONException e) {
+            Log.e(TAG, "JSON Exception: ", e);
+            handleApiError("요청 생성 중 오류가 발생했습니다.");
+            return;
+        }
+
+        RequestBody body = RequestBody.create(jsonBody.toString(), mediaType);
+        Request request = new Request.Builder()
+                .url("https://api.perplexity.ai/chat/completions")
+                .post(body)
+                .addHeader("accept", "application/json")
+                .addHeader("content-type", "application/json")
+                .addHeader("authorization", "Bearer " + BuildConfig.PERPLEXITY_API_KEY)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                handleApiError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                // 응답 실패 시, 응답 본문을 읽어서 로그에 남김
+                try (ResponseBody responseBody = response.body()) {
+                    String responseString = (responseBody != null) ? responseBody.string() : "";
+
+                    if (!response.isSuccessful()) {
+                        Log.e(TAG, "API Call Unsuccessful: " + response.code());
+                        Log.e(TAG, "Error Body: " + responseString); // 서버가 보낸 오류 메시지 확인
+                        handleApiError("API 호출에 실패했습니다. (코드: " + response.code() + ")");
+                        return;
+                    }
+
+                    JSONObject jsonResponse = new JSONObject(responseString);
+                    String botResponse = jsonResponse.getJSONArray("choices")
+                            .getJSONObject(0)
+                            .getJSONObject("message")
+                            .getString("content");
+
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            updateLastBotMessage(botResponse);
+                            setUiEnabled(true);
+                        });
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Response Parsing Error: ", e);
+                    handleApiError("응답 해석 중 오류가 발생했습니다.");
+                }
+            }
+        });
+    }
+
+    private void handleApiError(String errorMessage) {
+        if (getActivity() != null) {
+            getActivity().runOnUiThread(() -> {
+                updateLastBotMessage(errorMessage);
+                setUiEnabled(true);
+            });
         }
     }
 
@@ -76,10 +190,21 @@ public class ChatbotDialogFragment extends BottomSheetDialogFragment {
         rvChatMessages.scrollToPosition(messageList.size() - 1);
     }
 
-    private void simulateBotResponse(String userMessage) {
-        // 1초 후에 봇이 응답하는 것처럼 보이게 함.
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            addBotMessage("'" + userMessage + "'에 대한 응답입니다. API 연동이 필요합니다.");
-        }, 1000);
+    private void updateLastBotMessage(String message) {
+        if (!messageList.isEmpty()) {
+            int lastIndex = messageList.size() - 1;
+            ChatMessage lastMessage = messageList.get(lastIndex);
+            if (!lastMessage.isUser()) {
+                messageList.set(lastIndex, new ChatMessage(message, false));
+                chatAdapter.notifyItemChanged(lastIndex);
+            } else {
+                addBotMessage(message);
+            }
+        }
+    }
+
+    private void setUiEnabled(boolean enabled) {
+        etChatInput.setEnabled(enabled);
+        btnSendChat.setEnabled(enabled);
     }
 }
