@@ -16,6 +16,10 @@ android {
     namespace 'com.belight.carelight'
     compileSdk 35
 
+    buildFeatures {
+        buildConfig true
+    }
+
     defaultConfig {
         applicationId "com.belight.carelight"
         minSdk 23
