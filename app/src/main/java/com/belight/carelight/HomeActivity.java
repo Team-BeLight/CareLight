@@ -165,7 +165,7 @@ public class HomeActivity extends AppCompatActivity {
 
         btnVoiceChat.setOnClickListener(v -> {
             ChatbotDialogFragment chatbotDialog = new ChatbotDialogFragment();
-            chatbotDialog.show(getSupportFragmentManager(), "ChatbotDialog");
+            chatbotDialog.show(getSupportFragmentManager(), chatbotDialog.getTag());
         });
 
         // 하단 카드 버튼
