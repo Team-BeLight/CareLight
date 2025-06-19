@@ -9,7 +9,8 @@ import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.MotionEvent;
-import android.view.View;
+import android.content.SharedPreferences;
+import android.preference.PreferenceManager;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -102,6 +103,7 @@ public class DebugActivity extends AppCompatActivity {
 
         initializePeriodicUpdater();
         loadAlarmTimes();
+        loadSavedData();
 
         setupEspControlListeners();
         setupTemiButtonListeners();
@@ -140,6 +142,7 @@ public class DebugActivity extends AppCompatActivity {
 
         btnResetMedicationStatus = findViewById(R.id.btn_reset_medication_status);
     }
+
 
     private void startPeriodicUpdates() {
         if (!isPollingActive && !currentEspIpAddress.isEmpty()) {
@@ -361,6 +364,7 @@ public class DebugActivity extends AppCompatActivity {
             String ipAddress = etEspIpAddress.getText() != null ? etEspIpAddress.getText().toString().trim() : "";
             if (!ipAddress.isEmpty() && isValidIpAddress(ipAddress)) {
                 currentEspIpAddress = ipAddress;
+                saveEspIpAddress(ipAddress); // IP 주소를 저장함.
                 stopPeriodicUpdates();
                 fetchEspInfoFromServer(currentEspIpAddress, false);
                 startPeriodicUpdates();
@@ -571,11 +575,11 @@ public class DebugActivity extends AppCompatActivity {
 
     // 약 복용 상태를 초기화하는 메소드 (SharedPreferences 및 Firestore)
     private void resetMedicationStatus() {
-        // 1. SharedPreferences의 마지막 복용 날짜 기록 삭제
+        // SharedPreferences의 마지막 복용 날짜 기록 삭제
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
         prefs.edit().remove("last_medication_date").apply();
 
-        // 2. Firestore의 관련 필드 삭제 및 상태 업데이트
+        // Firestore의 관련 필드 삭제 및 상태 업데이트
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null) {
             Toast.makeText(this, "로그인 정보가 없습니다.", Toast.LENGTH_SHORT).show();
@@ -596,6 +600,33 @@ public class DebugActivity extends AppCompatActivity {
                     Toast.makeText(this, "상태 초기화에 실패했습니다.", Toast.LENGTH_SHORT).show();
                     Log.w(TAG, "Error resetting medication status", e);
                 });
+    }
+
+    private void loadSavedData() {
+        loadAlarmTimes();
+        loadEspIpAddress();
+    }
+
+    // SharedPreferences에서 ESP32 IP 주소를 불러와 입력창에 설정함.
+    private void loadEspIpAddress() {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        String savedIp = prefs.getString("esp32_ip_address", "");
+        if (!savedIp.isEmpty()) {
+            currentEspIpAddress = savedIp;
+            if (etEspIpAddress != null) {
+                etEspIpAddress.setText(savedIp);
+            }
+            // IP가 이미 있으면 바로 정보 폴링 시작
+            startPeriodicUpdates();
+        }
+    }
+
+
+    // SharedPreferences에 ESP32 IP 주소를 저장함.
+    private void saveEspIpAddress(String ipAddress) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        prefs.edit().putString("esp32_ip_address", ipAddress).apply();
+        Log.d(TAG, "ESP32 IP Address saved: " + ipAddress);
     }
 
 }

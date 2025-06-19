@@ -14,6 +14,7 @@ import android.widget.Button;
 import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.activity.EdgeToEdge;
@@ -29,6 +30,7 @@ import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FieldValue;
 
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -38,6 +40,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+
 public class HomeActivity extends AppCompatActivity {
 
     private static final String TAG = "HomeActivity";
@@ -46,11 +58,15 @@ public class HomeActivity extends AppCompatActivity {
     private TextView tvRobotInfo, tvRobotLocation, tvUserLocation, tvBatteryStatus, tvMedicationStatus;
     private Button btnGetMedicine, btnRobotCall, btnVoiceChat, btnCleaning;
     private Button btnGotoLocation, btnRegisterLocation, btnDeleteLocation, btnSetUserLocation;
-    private CardView cvTopMenu;
+
+    private TextView tvCurrentHeartRate;
+    private Button btnMeasureHeartRate;
 
     // --- Firebase 변수 ---
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
+    private final OkHttpClient client = new OkHttpClient();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     // --- 로봇 상태 데이터 ---
     private List<String> robotLocations = new ArrayList<>();
@@ -111,6 +127,9 @@ public class HomeActivity extends AppCompatActivity {
 
         // 약 관련
         tvMedicationStatus = findViewById(R.id.tv_medication_status);
+
+        tvCurrentHeartRate = findViewById(R.id.tv_current_heart_rate);
+        btnMeasureHeartRate = findViewById(R.id.btn_measure_heart_rate);
     }
 
     @Override
@@ -182,6 +201,13 @@ public class HomeActivity extends AppCompatActivity {
                         updateLastMedicationDate(lastTakenDate);
                         updateMedicationStatusUI();
                     }
+
+                    Number heartRate = snapshot.getLong("heartRate");
+                    if (heartRate != null && heartRate.intValue() > 0) {
+                        tvCurrentHeartRate.setText(String.format("현재 심박수: %d BPM", heartRate.intValue()));
+                    } else {
+                        tvCurrentHeartRate.setText("현재 심박수: N/A");
+                    }
                 }
             } else {
                 Log.w(TAG, "User document not found for UID: " + userUid);
@@ -207,6 +233,17 @@ public class HomeActivity extends AppCompatActivity {
         btnRegisterLocation.setOnClickListener(v -> showRegisterLocationDialog());
         btnGotoLocation.setOnClickListener(v -> showLocationSelectionDialog());
         btnDeleteLocation.setOnClickListener(v -> showDeleteLocationDialog());
+
+        btnCleaning.setOnClickListener(v -> {
+            Toast.makeText(this, "ESP32에 청소 시작을 요청합니다...", Toast.LENGTH_SHORT).show();
+            // ESP32의 /single_arm_cleaning 엔드포인트를 호출함.
+            triggerEspAction("/manipulator_work_cleaning", "청소하기");
+        });
+
+        btnMeasureHeartRate.setOnClickListener(v -> {
+            Toast.makeText(this, "ESP32로부터 심박수 정보를 가져옵니다...", Toast.LENGTH_SHORT).show();
+            fetchHeartRateFromEsp();
+        });
     }
 
     private void callRobotForTask(String taskName) {
@@ -221,7 +258,7 @@ public class HomeActivity extends AppCompatActivity {
 
             Map<String, Object> params = new HashMap<>();
             params.put("location", userLocation);
-            params.put("angle", 0); // 로봇이 도착해서 사용자를 바라보도록 0도 설정
+            params.put("angle", 0); // 로봇이 도착해서 사용자를 바라보도록 0도 설정함.
             sendCommand("goToLocation", userLocation + "(으)로 " + taskName + "을(를) 위해 이동합니다.", params);
         }
     }
@@ -518,5 +555,85 @@ public class HomeActivity extends AppCompatActivity {
     private void updateLastMedicationDate(String date) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
         prefs.edit().putString("last_medication_date", date).apply();
+    }
+
+    private void fetchHeartRateFromEsp() {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        String ipAddress = prefs.getString("esp32_ip_address", "");
+
+        if (ipAddress.isEmpty()) {
+            Toast.makeText(this, "먼저 디버그 모드에서 ESP32의 IP주소를 설정해주세요.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        String requestUrl = "http://" + ipAddress + "/info";
+        Request request = new Request.Builder().url(requestUrl).build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                mainHandler.post(() -> Toast.makeText(HomeActivity.this, "ESP32 연결에 실패했습니다.", Toast.LENGTH_SHORT).show());
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                try (ResponseBody responseBody = response.body()) {
+                    if (!response.isSuccessful() || responseBody == null) {
+                        mainHandler.post(() -> Toast.makeText(HomeActivity.this, "ESP32 응답 오류: " + response.code(), Toast.LENGTH_SHORT).show());
+                        return;
+                    }
+
+                    String responseString = responseBody.string();
+                    JSONObject jsonObject = new JSONObject(responseString);
+                    int bpm = jsonObject.optInt("bpm", 0);
+
+                    // Firestore의 heartRate 필드를 업데이트
+                    FirebaseUser currentUser = mAuth.getCurrentUser();
+                    if (currentUser != null && bpm > 0) {
+                        db.collection("users").document(currentUser.getUid())
+                                .update("heartRate", bpm)
+                                .addOnSuccessListener(aVoid -> Log.d(TAG, "Heart rate updated to Firestore: " + bpm))
+                                .addOnFailureListener(err -> Log.w(TAG, "Error updating heart rate", err));
+                    }
+                } catch (Exception e) { // IOException, JSONException 모두 처리
+                    Log.e(TAG, "Failed to process response from ESP32", e);
+                }
+            }
+        });
+    }
+
+    private void triggerEspAction(String endpoint, String taskName) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        String ipAddress = prefs.getString("esp32_ip_address", "");
+
+        if (ipAddress.isEmpty()) {
+            Toast.makeText(this, "먼저 디버그 모드에서 ESP32의 IP주소를 설정해주세요.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        String requestUrl = "http://" + ipAddress + endpoint;
+        Request request = new Request.Builder().url(requestUrl).build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                mainHandler.post(() -> Toast.makeText(HomeActivity.this, "ESP32 연결에 실패했습니다: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                mainHandler.post(() -> {
+                    if (response.isSuccessful()) {
+                        Toast.makeText(HomeActivity.this, taskName + " 작업을 시작합니다.", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(HomeActivity.this, taskName + " 작업 요청에 실패했습니다: " + response.code(), Toast.LENGTH_SHORT).show();
+                    }
+                });
+                // 응답 본문은 닫음.
+                if (response.body() != null) {
+                    response.body().close();
+                }
+            }
+        });
     }
 }
