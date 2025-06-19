@@ -1,15 +1,24 @@
 package com.belight.carelight;
 
+import android.Manifest;
+import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.speech.RecognizerIntent;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -21,6 +30,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
@@ -38,10 +48,41 @@ public class ChatbotDialogFragment extends BottomSheetDialogFragment {
     private RecyclerView rvChatMessages;
     private EditText etChatInput;
     private ImageButton btnSendChat;
+
+    private ImageButton btnVoiceInput;
     private ChatAdapter chatAdapter;
     private List<ChatMessage> messageList;
 
     private OkHttpClient client;
+
+    private final ActivityResultLauncher<Intent> sttLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                    ArrayList<String> results = result.getData().getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+                    if (results != null && !results.isEmpty()) {
+                        String spokenText = results.get(0);
+
+                        // 인식된 텍스트를 UI에 표시하고 즉시 API 호출
+                        if (!spokenText.trim().isEmpty()) {
+                            addUserMessage(spokenText);
+                            addBotMessage("생각 중...");
+                            setUiEnabled(false);
+                            callPerplexityApi();
+                        }
+                    }
+                }
+            });
+
+
+    // 마이크 권한 요청을 처리하는 런처
+    private final ActivityResultLauncher<String> requestPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), isGranted -> {
+                if (isGranted) {
+                    launchStt(); // 권한이 허용되면 음성 인식 시작
+                } else {
+                    Toast.makeText(getContext(), "음성 입력을 사용하려면 마이크 권한이 필요합니다.", Toast.LENGTH_SHORT).show();
+                }
+            });
 
     @Nullable
     @Override
@@ -62,6 +103,7 @@ public class ChatbotDialogFragment extends BottomSheetDialogFragment {
         rvChatMessages = view.findViewById(R.id.rv_chat_messages);
         etChatInput = view.findViewById(R.id.et_chat_input);
         btnSendChat = view.findViewById(R.id.btn_send_chat);
+        btnVoiceInput = view.findViewById(R.id.btn_voice_input);
 
         messageList = new ArrayList<>();
         chatAdapter = new ChatAdapter(messageList);
@@ -73,6 +115,8 @@ public class ChatbotDialogFragment extends BottomSheetDialogFragment {
         addBotMessage("안녕하세요, 저는 어르신의 다정한 대화 친구 'Care Light'예요. 무엇을 도와드릴까요?");
 
         btnSendChat.setOnClickListener(v -> sendMessage());
+
+        btnVoiceInput.setOnClickListener(v -> checkPermissionAndStartStt());
     }
 
     private void sendMessage() {
@@ -83,6 +127,30 @@ public class ChatbotDialogFragment extends BottomSheetDialogFragment {
             addBotMessage("생각 중...");
             setUiEnabled(false);
             callPerplexityApi();
+        }
+    }
+
+    private void checkPermissionAndStartStt() {
+        if (ContextCompat.checkSelfPermission(
+                requireContext(), Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            // 권한이 이미 허용된 경우
+            launchStt();
+        } else {
+            // 권한이 없는 경우, 권한 요청
+            requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
+        }
+    }
+
+    // 안드로이드 내장 음성 인식 액티비티를 실행하는 메소드
+    private void launchStt() {
+        Intent sttIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        sttIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        sttIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.KOREAN);
+        sttIntent.putExtra(RecognizerIntent.EXTRA_PROMPT, "말씀해주세요...");
+        try {
+            sttLauncher.launch(sttIntent);
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "음성 인식을 지원하지 않는 기기입니다.", Toast.LENGTH_SHORT).show();
         }
     }
 
