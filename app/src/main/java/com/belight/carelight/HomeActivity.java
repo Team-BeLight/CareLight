@@ -2,19 +2,22 @@ package com.belight.carelight;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Looper;
 import android.util.Log;
 import android.text.InputType;
 import android.view.View;
 import android.widget.TextView;
 import android.widget.EditText;
 import android.widget.Toast;
+import android.os.Handler;
 import android.widget.Button;
 import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
 
-import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.activity.EdgeToEdge;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -26,12 +29,13 @@ import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FieldValue;
 
-import com.belight.carelight.ChatbotDialogFragment;
-
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class HomeActivity extends AppCompatActivity {
@@ -39,9 +43,10 @@ public class HomeActivity extends AppCompatActivity {
     private static final String TAG = "HomeActivity";
 
     // --- UI 요소 변수 ---
-    private TextView tvRobotInfo, tvRobotLocation, tvUserLocation, tvBatteryStatus;
+    private TextView tvRobotInfo, tvRobotLocation, tvUserLocation, tvBatteryStatus, tvMedicationStatus;
     private Button btnGetMedicine, btnRobotCall, btnVoiceChat, btnCleaning;
     private Button btnGotoLocation, btnRegisterLocation, btnDeleteLocation, btnSetUserLocation;
+    private Button btnConfirmMedication;
     private CardView cvTopMenu;
 
     // --- Firebase 변수 ---
@@ -60,6 +65,9 @@ public class HomeActivity extends AppCompatActivity {
     private static final long MAX_CLICK_INTERVAL_MS = 500;
     private Toast currentCountdownToast = null;
 
+    private final Handler statusUpdateHandler = new Handler(Looper.getMainLooper());
+    private Runnable statusUpdateRunnable;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -72,10 +80,9 @@ public class HomeActivity extends AppCompatActivity {
             return insets;
         });
 
-        // 초기화 메소드 호출
+        // 초기화
+        initializeFirebase();
         initializeUI();
-        mAuth = FirebaseAuth.getInstance();
-        db = FirebaseFirestore.getInstance();
         loadUserLocation();
 
         // 리스너 설정
@@ -102,6 +109,29 @@ public class HomeActivity extends AppCompatActivity {
         btnGotoLocation = findViewById(R.id.btn_goto_location);
         btnRegisterLocation = findViewById(R.id.btn_register_location);
         btnDeleteLocation = findViewById(R.id.btn_delete_location);
+
+        // 약 관련
+        tvMedicationStatus = findViewById(R.id.tv_medication_status);
+        btnConfirmMedication = findViewById(R.id.btn_confirm_medication);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // 화면이 다시 보일 때마다 상태 업데이트 및 주기적 체크 시작
+        startPeriodicStatusCheck();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // 화면이 보이지 않으면 주기적 체크 중지
+        stopPeriodicStatusCheck();
+    }
+
+    private void initializeFirebase() {
+        mAuth = FirebaseAuth.getInstance();
+        db = FirebaseFirestore.getInstance();
     }
 
     private void setupRealtimeListeners() {
@@ -147,6 +177,13 @@ public class HomeActivity extends AppCompatActivity {
                     if (locations != null) {
                         this.robotLocations = locations;
                     }
+
+                    String lastTakenDate = snapshot.getString("lastMedicationTakenDate");
+
+                    if (lastTakenDate != null) {
+                        updateLastMedicationDate(lastTakenDate);
+                        updateMedicationStatusUI();
+                    }
                 }
             } else {
                 Log.w(TAG, "User document not found for UID: " + userUid);
@@ -172,6 +209,14 @@ public class HomeActivity extends AppCompatActivity {
         btnRegisterLocation.setOnClickListener(v -> showRegisterLocationDialog());
         btnGotoLocation.setOnClickListener(v -> showLocationSelectionDialog());
         btnDeleteLocation.setOnClickListener(v -> showDeleteLocationDialog());
+
+        btnConfirmMedication.setOnClickListener(v -> {
+            updateMedicationStatus(true);
+            String todayDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+            updateLastMedicationDate(todayDate);
+            sendCommand("medicationConfirmed", "약 복용이 확인되었습니다.", null);
+            Toast.makeText(this, "약 복용 완료를 기록했습니다.", Toast.LENGTH_SHORT).show();
+        });
     }
 
     private void callRobotForTask(String taskName) {
@@ -406,5 +451,69 @@ public class HomeActivity extends AppCompatActivity {
     private void setupHiddenFeatureListeners() {
         setupDebugClickListener();
         setupLogoutClickListener();
+    }
+
+    private void startPeriodicStatusCheck() {
+        stopPeriodicStatusCheck();
+        statusUpdateRunnable = () -> {
+            updateMedicationStatusUI();
+            statusUpdateHandler.postDelayed(statusUpdateRunnable, 60000); // 1분마다
+        };
+        statusUpdateHandler.post(statusUpdateRunnable);
+    }
+
+    private void stopPeriodicStatusCheck() {
+        if (statusUpdateRunnable != null) {
+            statusUpdateHandler.removeCallbacks(statusUpdateRunnable);
+        }
+    }
+
+    private void updateMedicationStatusUI() {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        String lastTakenDate = prefs.getString("last_medication_date", "");
+        String todayDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+
+        if (todayDate.equals(lastTakenDate)) {
+            updateMedicationStatus(true);
+            return;
+        }
+
+        int medicationHour = prefs.getInt("medication_hour", -1);
+        int medicationMinute = prefs.getInt("medication_minute", -1);
+
+        if (medicationHour != -1) {
+            Calendar now = Calendar.getInstance();
+            Calendar medicationTime = Calendar.getInstance();
+            medicationTime.set(Calendar.HOUR_OF_DAY, medicationHour);
+            medicationTime.set(Calendar.MINUTE, medicationMinute);
+            medicationTime.set(Calendar.SECOND, 0);
+            if (now.after(medicationTime)) {
+                updateMedicationStatus(false);
+            } else {
+                updateMedicationStatus(null);
+            }
+        } else {
+            updateMedicationStatus(null);
+        }
+    }
+    private void updateMedicationStatus(Boolean isTaken) {
+        if (isTaken != null && isTaken) {
+            tvMedicationStatus.setText("복용 완료");
+            tvMedicationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark));
+            btnConfirmMedication.setEnabled(false);
+        } else if (isTaken != null && !isTaken) {
+            tvMedicationStatus.setText("복용 전");
+            tvMedicationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark));
+            btnConfirmMedication.setEnabled(true);
+        } else {
+            tvMedicationStatus.setText("복용 전");
+            tvMedicationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray));
+            btnConfirmMedication.setEnabled(false);
+        }
+    }
+
+    private void updateLastMedicationDate(String date) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        prefs.edit().putString("last_medication_date", date).apply();
     }
 }
