@@ -248,6 +248,50 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
+    <!-- 심박수 측정 섹션 -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cv_heart_rate_menu"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="8dp"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="10dp"
+        app:contentPadding="16dp">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="건강 확인"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+                <Button
+                    android:id="@+id/btn_measure_heart_rate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="심박수 측정 시작" />
+                <TextView
+                    android:id="@+id/tv_current_heart_rate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:text="현재 심박수: N/A"
+                    android:textSize="16sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
     <!-- 하단 장소 관리 섹션 -->
     <androidx.cardview.widget.CardView
         android:id="@+id/cv_bottom_menu"
