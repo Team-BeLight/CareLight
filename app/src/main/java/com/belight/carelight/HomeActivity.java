@@ -288,7 +288,7 @@ public class HomeActivity extends AppCompatActivity {
             .show();
     }
 
-    private void sendCommand(String command, String message, Map<String, Object> parameters) {
+    public void sendCommand(String command, String message, Map<String, Object> parameters) {
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null) {
             Toast.makeText(this, "로그인이 필요합니다.", Toast.LENGTH_SHORT).show();

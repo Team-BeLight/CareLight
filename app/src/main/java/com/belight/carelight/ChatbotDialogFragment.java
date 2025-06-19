@@ -137,8 +137,14 @@ public class ChatbotDialogFragment extends BottomSheetDialogFragment {
 
                     if (getActivity() != null) {
                         getActivity().runOnUiThread(() -> {
+                            // 챗봇 UI에 봇의 답변을 업데이트함.
                             updateLastBotMessage(botResponse);
                             setUiEnabled(true);
+
+                            // 로봇의 답변을 음성으로 말하도록 command를 보냄
+                            if (getActivity() instanceof HomeActivity) {
+                                ((HomeActivity) getActivity()).sendCommand("speak", botResponse, null);
+                            }
                         });
                     }
                 } catch (Exception e) {
