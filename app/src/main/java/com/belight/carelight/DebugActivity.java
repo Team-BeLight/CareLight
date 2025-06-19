@@ -1,13 +1,16 @@
-package com.belight.carelight; // 본인의 패키지 이름으로 정확히 변경해주세요
+package com.belight.carelight;
 
 import android.annotation.SuppressLint;
+import android.app.TimePickerDialog;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.preference.PreferenceManager;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
-import android.view.MotionEvent;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -18,11 +21,19 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.google.android.material.textfield.TextInputEditText;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.Calendar;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -30,15 +41,6 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
-
-import com.google.android.material.textfield.TextInputEditText;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.FieldValue;
-import com.google.firebase.firestore.FirebaseFirestore;
-
-import java.util.HashMap;
-import java.util.Map;
 
 public class DebugActivity extends AppCompatActivity {
 
@@ -55,7 +57,12 @@ public class DebugActivity extends AppCompatActivity {
     private Button btnTemiUpLeft, btnTemiUpRight, btnTemiDownLeft, btnTemiDownRight;
     private Button btnTemiStop;
 
-    // --- 백그라운드 작업 및 통신 관련 변수 ---
+
+    // 알람 설정 UI 변수
+    private TextView tvWakeupTime, tvMedicationTime;
+    private Button btnSetWakeupTime, btnSetMedicationTime, btnSendAlarmCommand;
+
+    // 백그라운드 작업 및 통신 관련 변수
     private final OkHttpClient client = new OkHttpClient();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private Handler periodicUpdateHandler;
@@ -65,6 +72,11 @@ public class DebugActivity extends AppCompatActivity {
     private String currentEspIpAddress = "";
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
+
+
+    // 알람 시간 저장 변수
+    private int wakeupHour = -1, wakeupMinute = -1;
+    private int medicationHour = -1, medicationMinute = -1;
 
     private final Handler temiControlHandler = new Handler(Looper.getMainLooper());
     private Runnable temiControlRunnable;
@@ -86,9 +98,12 @@ public class DebugActivity extends AppCompatActivity {
         mAuth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
 
+        initializePeriodicUpdater();
+        loadAlarmTimes();
+
         setupEspControlListeners();
         setupTemiButtonListeners();
-        initializePeriodicUpdater();
+        setupAlarmControlListeners();
     }
 
     private void initializeUI() {
@@ -112,6 +127,13 @@ public class DebugActivity extends AppCompatActivity {
         btnTemiDownLeft = findViewById(R.id.btn_temi_down_left);
         btnTemiDownRight = findViewById(R.id.btn_temi_down_right);
         btnTemiStop = findViewById(R.id.btn_temi_stop);
+
+
+        tvWakeupTime = findViewById(R.id.tv_wakeup_time);
+        btnSetWakeupTime = findViewById(R.id.btn_set_wakeup_time);
+        tvMedicationTime = findViewById(R.id.tv_medication_time);
+        btnSetMedicationTime = findViewById(R.id.btn_set_medication_time);
+        btnSendAlarmCommand = findViewById(R.id.btn_send_alarm_command);
     }
 
     private void startPeriodicUpdates() {
@@ -191,10 +213,10 @@ public class DebugActivity extends AppCompatActivity {
             public void onResponse(@NonNull Call call, @NonNull Response response) {
                 ResponseBody responseBody = response.body();
                 String responseBodyString;
-                if (responseBody == null) { /* ... */ return; }
+                if (responseBody == null) { return; }
                 try {
                     responseBodyString = responseBody.string();
-                } catch (IOException e) { /* ... */ return; }
+                } catch (IOException e) { return; }
                 finally {
                     responseBody.close();
                 }
@@ -423,6 +445,112 @@ public class DebugActivity extends AppCompatActivity {
                 .update("temiCommand", commandData)
                 .addOnSuccessListener(aVoid -> Log.d(TAG, "skidJoy command sent successfully."))
                 .addOnFailureListener(e -> Log.w(TAG, "Error sending skidJoy command", e));
+    }
+
+
+    // 디버그: 알람 설정 (시연을 위해서)
+    private void setupAlarmControlListeners() {
+        // TimePickerDialog 사용해서 구현함
+        btnSetWakeupTime.setOnClickListener(v -> {
+            showTimePicker("기상 시간 설정", wakeupHour, wakeupMinute, (hour, minute) -> {
+                wakeupHour = hour;
+                wakeupMinute = minute;
+                updateAlarmTimeView(tvWakeupTime, wakeupHour, wakeupMinute);
+                saveAlarmTime("wakeup_hour", hour);
+                saveAlarmTime("wakeup_minute", minute);
+            });
+        });
+
+        // TimePickerDialog 사용해서 구현함
+        btnSetMedicationTime.setOnClickListener(v -> {
+            showTimePicker("약 복용 시간 설정", medicationHour, medicationMinute, (hour, minute) -> {
+                medicationHour = hour;
+                medicationMinute = minute;
+                updateAlarmTimeView(tvMedicationTime, medicationHour, medicationMinute);
+                saveAlarmTime("medication_hour", hour);
+                saveAlarmTime("medication_minute", minute);
+            });
+        });
+
+        // 버튼 클릭 시 Firestore로 명령 전송함
+        btnSendAlarmCommand.setOnClickListener(v -> {
+            if (wakeupHour == -1 || medicationHour == -1) {
+                Toast.makeText(this, "기상 시간과 약 복용 시간을 모두 설정해주세요.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            Map<String, Object> params = new HashMap<>();
+            params.put("wakeupTime", String.format(Locale.US, "%02d:%02d", wakeupHour, wakeupMinute));
+            params.put("medicationTime", String.format(Locale.US, "%02d:%02d", medicationHour, medicationMinute));
+
+            sendCommand("setAlarms", "알람 시간 설정", params);
+
+            Toast.makeText(this, "알람 시간을 로봇에게 전송했습니다.", Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    private void showTimePicker(String title, int initialHour, int initialMinute, OnTimeSelectedListener listener) {
+        Calendar c = Calendar.getInstance();
+        int currentHour = initialHour != -1 ? initialHour : c.get(Calendar.HOUR_OF_DAY);
+        int currentMinute = initialMinute != -1 ? initialMinute : c.get(Calendar.MINUTE);
+
+        TimePickerDialog timePickerDialog = new TimePickerDialog(this,
+                (view, hourOfDay, minute) -> listener.onTimeSelected(hourOfDay, minute),
+                currentHour, currentMinute, true); // true: 24시간 형식 사용
+        timePickerDialog.setTitle(title);
+        timePickerDialog.show();
+    }
+
+    private void updateAlarmTimeView(TextView textView, int hour, int minute) {
+        textView.setText(String.format(Locale.US, "%02d : %02d", hour, minute));
+    }
+
+    private void saveAlarmTime(String key, int value) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        prefs.edit().putInt(key, value).apply();
+    }
+
+    // SharedPreferences에서 저장된 알람 시간을 불러오는 메소드
+    private void loadAlarmTimes() {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        wakeupHour = prefs.getInt("wakeup_hour", -1);
+        wakeupMinute = prefs.getInt("wakeup_minute", -1);
+        medicationHour = prefs.getInt("medication_hour", -1);
+        medicationMinute = prefs.getInt("medication_minute", -1);
+
+        if (wakeupHour != -1) {
+            updateAlarmTimeView(tvWakeupTime, wakeupHour, wakeupMinute);
+        }
+        if (medicationHour != -1) {
+            updateAlarmTimeView(tvMedicationTime, medicationHour, medicationMinute);
+        }
+    }
+
+    // TimePickerDialog의 결과 콜백을 위한 인터페이스
+    interface OnTimeSelectedListener {
+        void onTimeSelected(int hour, int minute);
+    }
+
+    // Firestore에 명령을 전송하는 범용 메소드
+    private void sendCommand(String command, String message, Map<String, Object> parameters) {
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser == null) {
+            Toast.makeText(this, "로그인 정보가 없습니다.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String userUid = currentUser.getUid();
+        Map<String, Object> commandData = new HashMap<>();
+        commandData.put("command", command);
+        commandData.put("message", message);
+        if (parameters != null) {
+            commandData.put("parameters", parameters);
+        }
+        commandData.put("timestamp", FieldValue.serverTimestamp());
+
+        db.collection("users").document(userUid)
+                .update("temiCommand", commandData)
+                .addOnSuccessListener(aVoid -> Log.d(TAG, "Command '" + command + "' sent successfully."))
+                .addOnFailureListener(e -> Log.w(TAG, "Error sending command", e));
     }
 
 }
