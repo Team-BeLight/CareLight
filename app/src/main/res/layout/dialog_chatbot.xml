@@ -44,6 +44,18 @@
         android:gravity="center_vertical"
         android:padding="8dp">
 
+
+        <!-- 음성 입력 버튼 -->
+        <ImageButton
+            android:id="@+id/btn_voice_input"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_btn_speak_now"
+            android:contentDescription="음성으로 입력"
+            app:tint="?attr/colorOnSurfaceVariant" />
+
         <EditText
             android:id="@+id/et_chat_input"
             android:layout_width="0dp"
