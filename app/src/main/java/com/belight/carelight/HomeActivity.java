@@ -497,19 +497,35 @@ public class HomeActivity extends AppCompatActivity {
         }
     }
     private void updateMedicationStatus(Boolean isTaken) {
+        String statusText;
         if (isTaken != null && isTaken) {
-            tvMedicationStatus.setText("복용 완료");
+            statusText = "복용 완료";
+            tvMedicationStatus.setText(statusText);
             tvMedicationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark));
             btnConfirmMedication.setEnabled(false);
-        } else if (isTaken != null && !isTaken) {
+        } else if (isTaken != null) {
+            statusText = "복용 전 (시간 지남)";
             tvMedicationStatus.setText("복용 전");
             tvMedicationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark));
             btnConfirmMedication.setEnabled(true);
         } else {
+            statusText = "복용 전 (대기 중)";
             tvMedicationStatus.setText("복용 전");
             tvMedicationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray));
             btnConfirmMedication.setEnabled(false);
         }
+        // Firestore에 상태 업데이트
+        updateFirestoreMedicationStatus(statusText);
+    }
+
+    private void updateFirestoreMedicationStatus(String status) {
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser == null) return;
+
+        db.collection("users").document(currentUser.getUid())
+                .update("medicationStatus", status)
+                .addOnSuccessListener(aVoid -> Log.d(TAG, "Successfully updated medication status to: " + status))
+                .addOnFailureListener(e -> Log.w(TAG, "Error updating medication status.", e));
     }
 
     private void updateLastMedicationDate(String date) {
