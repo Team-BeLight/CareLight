@@ -15,6 +15,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -56,6 +57,7 @@ public class DebugActivity extends AppCompatActivity {
     private Button btnTemiUp, btnTemiDown, btnTemiLeft, btnTemiRight;
     private Button btnTemiUpLeft, btnTemiUpRight, btnTemiDownLeft, btnTemiDownRight;
     private Button btnTemiStop;
+    private Button btnResetMedicationStatus;
 
 
     // 알람 설정 UI 변수
@@ -104,6 +106,7 @@ public class DebugActivity extends AppCompatActivity {
         setupEspControlListeners();
         setupTemiButtonListeners();
         setupAlarmControlListeners();
+        setupScenarioDebugListeners();
     }
 
     private void initializeUI() {
@@ -134,6 +137,8 @@ public class DebugActivity extends AppCompatActivity {
         tvMedicationTime = findViewById(R.id.tv_medication_time);
         btnSetMedicationTime = findViewById(R.id.btn_set_medication_time);
         btnSendAlarmCommand = findViewById(R.id.btn_send_alarm_command);
+
+        btnResetMedicationStatus = findViewById(R.id.btn_reset_medication_status);
     }
 
     private void startPeriodicUpdates() {
@@ -551,6 +556,46 @@ public class DebugActivity extends AppCompatActivity {
                 .update("temiCommand", commandData)
                 .addOnSuccessListener(aVoid -> Log.d(TAG, "Command '" + command + "' sent successfully."))
                 .addOnFailureListener(e -> Log.w(TAG, "Error sending command", e));
+    }
+
+    private void setupScenarioDebugListeners() {
+        btnResetMedicationStatus.setOnClickListener(v -> {
+            new AlertDialog.Builder(this)
+                    .setTitle("복용 상태 초기화")
+                    .setMessage("정말 모든 복용 기록을 지우고, '복용 전' 상태로 되돌리시겠습니까?")
+                    .setPositiveButton("초기화", (dialog, which) -> resetMedicationStatus())
+                    .setNegativeButton("취소", null)
+                    .show();
+        });
+    }
+
+    // 약 복용 상태를 초기화하는 메소드 (SharedPreferences 및 Firestore)
+    private void resetMedicationStatus() {
+        // 1. SharedPreferences의 마지막 복용 날짜 기록 삭제
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        prefs.edit().remove("last_medication_date").apply();
+
+        // 2. Firestore의 관련 필드 삭제 및 상태 업데이트
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if (currentUser == null) {
+            Toast.makeText(this, "로그인 정보가 없습니다.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("medicationStatus", "복용 전 (리셋됨)");
+        updates.put("lastMedicationTakenDate", FieldValue.delete()); // 필드 자체를 삭제
+
+        db.collection("users").document(currentUser.getUid())
+                .update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Toast.makeText(this, "약 복용 상태가 성공적으로 초기화되었습니다.", Toast.LENGTH_SHORT).show();
+                    Log.d(TAG, "Medication status reset successfully.");
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(this, "상태 초기화에 실패했습니다.", Toast.LENGTH_SHORT).show();
+                    Log.w(TAG, "Error resetting medication status", e);
+                });
     }
 
 }
