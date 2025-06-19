@@ -128,15 +128,6 @@
                         android:layout_marginTop="8dp"
                         android:text="약 가져오기" />
 
-                    <Button
-                        android:id="@+id/btn_confirm_medication"
-                        style="?attr/materialButtonOutlinedStyle"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:enabled="false"
-                        android:text="복용 완료 확인" />
-
                 </LinearLayout>
             </RelativeLayout>
         </androidx.cardview.widget.CardView>
