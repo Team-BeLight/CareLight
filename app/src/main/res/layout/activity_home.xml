@@ -108,7 +108,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="약 관리"
+                        android:text="💊 약 관리"
                         android:textSize="20sp"
                         android:textStyle="bold" />
 
@@ -154,7 +154,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="로봇 호출"
+                        android:text="🤖 로봇 호출"
                         android:textSize="20sp"
                         android:textStyle="bold" />
 
@@ -190,7 +190,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="대화하기"
+                        android:text="💬 대화하기"
                         android:textSize="20sp"
                         android:textStyle="bold" />
 
@@ -226,7 +226,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="청소하기"
+                        android:text="🧹 청소하기"
                         android:textSize="20sp"
                         android:textStyle="bold" />
 
@@ -268,7 +268,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="8dp"
-                android:text="건강 확인"
+                android:text="❤️ 건강 확인"
                 android:textSize="18sp"
                 android:textStyle="bold" />
             <LinearLayout
@@ -314,7 +314,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="8dp"
-                android:text="장소 관리"
+                android:text="📍 장소 관리"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
